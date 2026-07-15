@@ -20,6 +20,11 @@
     "requires": {
       "llm": {
         "[development]": {
+          "kind": "llm-groq",
+          "service": "LLM",
+          "modelId": "llama-3.3-70b-versatile"
+        },
+        "[ollama]": {
           "kind": "llm-ollama",
           "service": "LLM",
           "modelId": "qwen2.5:14b"

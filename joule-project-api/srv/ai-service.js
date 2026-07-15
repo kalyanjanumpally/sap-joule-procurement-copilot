@@ -1,10 +1,18 @@
 const cds = require('@sap/cds');
-const { AnthropicLLMService, OllamaLLMService, GenAIHubLLMService } = require('@saptarishi/cds-plugin-llm');
+const {
+  AnthropicLLMService,
+  OllamaLLMService,
+  GenAIHubLLMService,
+  GroqLLMService,
+  OpenAICompatibleLLMService,
+} = require('@saptarishi/cds-plugin-llm');
 
 const PROVIDERS = {
   'llm-anthropic': AnthropicLLMService,
   'llm-ollama': OllamaLLMService,
   'llm-genai-hub': GenAIHubLLMService,
+  'llm-groq': GroqLLMService,
+  'llm-openai-compatible': OpenAICompatibleLLMService,
 };
 
 async function connectLLM() {

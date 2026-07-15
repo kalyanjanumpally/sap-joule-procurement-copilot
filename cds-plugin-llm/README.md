@@ -112,6 +112,8 @@ llm.embed({ input: string | string[], model?: string })
 |---|---|---|---|
 | `llm-anthropic` | Claude via Anthropic API | Pennies (per-token) | Working |
 | `llm-ollama` | Local Ollama daemon | Free | Working |
+| `llm-groq` | Groq's hosted Llama/Mixtral/Qwen (fast) | Generous free tier | Working |
+| `llm-openai-compatible` | Any OpenAI `/v1/chat/completions` endpoint (OpenAI, Together, Fireworks, DeepSeek direct, LM Studio, LocalAI...) | Varies | Working |
 | `llm-genai-hub` | SAP AI Core / GenAI Hub | Paid (extended plan) | Stub — see `lib/providers/genai-hub.js` |
 
 ## License
