@@ -1,5 +1,9 @@
 # cds-plugin-llm
 
+[![CI](https://github.com/kalyanjanumpally/sap-joule-procurement-copilot/actions/workflows/ci.yml/badge.svg)](https://github.com/kalyanjanumpally/sap-joule-procurement-copilot/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/@saptarishi/cds-plugin-llm.svg)](https://www.npmjs.com/package/@saptarishi/cds-plugin-llm)
+[![license](https://img.shields.io/npm/l/@saptarishi/cds-plugin-llm.svg)](./LICENSE)
+
 LLM-agnostic AI service for SAP CAP. One unified interface — swap between Anthropic (Claude), Ollama (local), Groq, any OpenAI-compatible endpoint, or SAP Generative AI Hub without changing your handler code.
 
 **Status:** alpha (v0.4.0). All five providers implemented. GenAI Hub is built to SAP's documented API contract and unit-tested against mocks; needs an AI Core extended plan to live-verify (feedback from anyone with access very welcome).
