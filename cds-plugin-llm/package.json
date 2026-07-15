@@ -10,7 +10,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "test": "node --test test/",
+    "test": "node --test test/*.js",
     "example:procurement": "node examples/procurement-handler.js"
   },
   "keywords": [

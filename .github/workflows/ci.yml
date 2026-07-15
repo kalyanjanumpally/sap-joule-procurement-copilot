@@ -38,7 +38,9 @@ jobs:
 
       - name: Unit tests (base LLMService, retry helper, GenAI Hub OAuth flow)
         working-directory: cds-plugin-llm
-        run: node --test test/
+        # explicit file glob rather than `test/` — Node 22 changed directory
+        # resolution and treats a bare directory name as a require() target
+        run: node --test test/*.js
 
       - name: End-to-end verification against mock AI Core
         run: node scripts/verify-genai-hub.js
