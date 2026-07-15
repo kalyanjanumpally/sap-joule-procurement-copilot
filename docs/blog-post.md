@@ -11,21 +11,23 @@ If you have tried to prototype a Joule skill or a CAP action that calls a large 
 
 For teams already committed to BTP that is fine — production runs on Generative AI Hub anyway, and you want that same runtime for governance, cost attribution, and model catalog reasons. But for the *prototype* phase, and for anyone learning the CAP + Joule stack for the first time, the friction is real. You end up either burning credits on throwaway experiments, or writing your CAP handlers against a local mock that behaves nothing like the eventual GenAI Hub call.
 
-I hit this while building a Joule Procurement Copilot as sales collateral for an S/4HANA Cloud engagement. The copilot needed a small CAP-hosted action to produce approver-ready purchase-order summaries — a task well within any modern LLM's abilities, but iterating on the prompt against GenAI Hub was slow and expensive. I wanted a way to develop locally against `ollama serve` on my Mac Studio, or against my own Anthropic API key, and only pay for GenAI Hub tokens once the flow was actually ready to demo.
+I hit this while building a Joule Procurement Copilot as sales collateral for an S/4HANA Cloud engagement. The copilot needed a small CAP-hosted action to produce approver-ready purchase-order summaries — a task well within any modern LLM's abilities, but iterating on the prompt against GenAI Hub was slow and expensive. I wanted a way to develop locally against `ollama serve` on my Mac Studio, or use free cloud inference from Groq for a fast iteration loop, and only pay for GenAI Hub tokens once the flow was actually ready to demo.
 
 That is what `cds-plugin-llm` does.
 
 ## What it is
 
-`@saptarishi/cds-plugin-llm` is a small (~12KB) CAP plugin that registers three service kinds under `cds.requires`:
+`@saptarishi/cds-plugin-llm` is a small (~16KB) CAP plugin that registers five service kinds under `cds.requires`:
 
 | Kind | Backend | Cost to iterate |
 | --- | --- | --- |
 | `llm-anthropic` | Claude via the official Anthropic SDK | Pennies per call, your own API key |
 | `llm-ollama` | Local Ollama daemon (qwen2.5, llama3, mistral, etc.) | Free |
+| `llm-groq` | Groq's hosted Llama / Mixtral / Qwen — sub-second inference | Generous free tier |
+| `llm-openai-compatible` | Any endpoint speaking OpenAI's `/chat/completions` shape (OpenAI, Together AI, Fireworks, DeepSeek, LM Studio, LocalAI) | Varies |
 | `llm-genai-hub` | SAP Generative AI Hub (stub — wiring notes in `lib/providers/genai-hub.js`) | Paid, once you flip the switch |
 
-All three expose the same interface:
+All five expose the same interface:
 
 ```js
 const llm = await connectLLM();  // returns the configured provider
@@ -43,7 +45,8 @@ Your CAP handler code does not know or care which backend is answering. Swapping
   "cds": {
     "requires": {
       "llm": {
-        "[development]": { "kind": "llm-ollama",     "modelId": "qwen2.5:14b"     },
+        "[development]": { "kind": "llm-groq",       "modelId": "llama-3.3-70b-versatile" },
+        "[ollama]":      { "kind": "llm-ollama",     "modelId": "qwen2.5:14b"             },
         "[production]":  { "kind": "llm-genai-hub", "credentials": { "deploymentId": "..." } }
       }
     }
@@ -80,7 +83,7 @@ this.on('summarizePurchaseOrder', async (req) => {
 });
 ```
 
-On my machine, in development profile, this runs against `qwen2.5:14b` on a Mac Studio LAN endpoint in about 2 seconds. When we ship to BTP, the same 20 lines run against GenAI Hub. **The handler is not touched.**
+On my machine, in the `[development]` profile, this call hits Groq's hosted `llama-3.3-70b-versatile` in **~500ms** — free tier, no billing anxiety. Flipping the profile to `[ollama]` runs the exact same handler against a local model on my Mac Studio (about 2 seconds, but the tokens never leave my LAN). When we ship to BTP, the `[production]` profile points at GenAI Hub. **The handler is not touched across any of them.**
 
 The Joule side is wired up as an ordinary skill:
 
@@ -107,8 +110,13 @@ npm install @saptarishi/cds-plugin-llm
 
 # Point cds.requires.llm at a kind (see the README)
 # Then in a handler:
-const { AnthropicLLMService, OllamaLLMService, GenAIHubLLMService } =
-  require('@saptarishi/cds-plugin-llm');
+const {
+  AnthropicLLMService,
+  OllamaLLMService,
+  GroqLLMService,
+  OpenAICompatibleLLMService,
+  GenAIHubLLMService,
+} = require('@saptarishi/cds-plugin-llm');
 ```
 
 - **Repo:** https://github.com/kalyanjanumpally/sap-joule-procurement-copilot
