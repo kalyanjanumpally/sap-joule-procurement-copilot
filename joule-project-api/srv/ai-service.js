@@ -1,5 +1,5 @@
 const cds = require('@sap/cds');
-const { AnthropicLLMService, OllamaLLMService, GenAIHubLLMService } = require('@kalyanjanumpally/cds-plugin-llm');
+const { AnthropicLLMService, OllamaLLMService, GenAIHubLLMService } = require('@saptarishi/cds-plugin-llm');
 
 const PROVIDERS = {
   'llm-anthropic': AnthropicLLMService,

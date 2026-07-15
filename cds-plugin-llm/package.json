@@ -1,5 +1,5 @@
 {
-  "name": "@kalyanjanumpally/cds-plugin-llm",
+  "name": "@saptarishi/cds-plugin-llm",
   "version": "0.1.0",
   "description": "LLM-agnostic AI service for SAP CAP. Speaks Anthropic, Ollama, and (planned) SAP Generative AI Hub behind one API.",
   "main": "lib/index.js",
@@ -31,16 +31,16 @@
     "requires": {
       "kinds": {
         "llm-anthropic": {
-          "impl": "@kalyanjanumpally/cds-plugin-llm/lib/providers/anthropic.js",
-          "model": "@kalyanjanumpally/cds-plugin-llm/lib/llm.cds"
+          "impl": "@saptarishi/cds-plugin-llm/lib/providers/anthropic.js",
+          "model": "@saptarishi/cds-plugin-llm/lib/llm.cds"
         },
         "llm-ollama": {
-          "impl": "@kalyanjanumpally/cds-plugin-llm/lib/providers/ollama.js",
-          "model": "@kalyanjanumpally/cds-plugin-llm/lib/llm.cds"
+          "impl": "@saptarishi/cds-plugin-llm/lib/providers/ollama.js",
+          "model": "@saptarishi/cds-plugin-llm/lib/llm.cds"
         },
         "llm-genai-hub": {
-          "impl": "@kalyanjanumpally/cds-plugin-llm/lib/providers/genai-hub.js",
-          "model": "@kalyanjanumpally/cds-plugin-llm/lib/llm.cds"
+          "impl": "@saptarishi/cds-plugin-llm/lib/providers/genai-hub.js",
+          "model": "@saptarishi/cds-plugin-llm/lib/llm.cds"
         }
       }
     }
