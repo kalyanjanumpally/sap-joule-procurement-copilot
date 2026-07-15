@@ -1,5 +1,6 @@
 const cds = require('@sap/cds');
 const LLMService = require('../LLMService');
+const { throwFromResponse } = require('../util');
 
 /**
  * Generic OpenAI-compatible provider.
@@ -34,20 +35,38 @@ class OpenAICompatibleLLMService extends LLMService {
     this.log = cds.log(`llm:${this.options.kind ?? 'openai-compatible'}`);
   }
 
-  async _chat({ model, maxTokens, system, messages }) {
+  async _chat({ model, maxTokens, system, messages, format, tools }) {
+    // For structured output on OpenAI-compat providers, use json_object mode
+    // (widely supported: OpenAI, Groq, Together, DeepSeek, Fireworks, LM Studio)
+    // and prepend the schema to the system prompt so the model knows the shape.
+    // json_schema strict mode is limited to a subset of models; we opt for
+    // broader compatibility here.
+    const effectiveSystem = format
+      ? `${system ?? ''}\n\nRespond with ONLY a JSON object matching this schema:\n${JSON.stringify(format, null, 2)}`.trim()
+      : system;
+
     const body = {
       model,
       max_tokens: maxTokens,
       messages: [
-        ...(system ? [{ role: 'system', content: system }] : []),
-        ...messages.map(m => ({
-          role: m.role,
-          content: typeof m.content === 'string'
-            ? m.content
-            : m.content.map(b => b.text ?? '').join(''),
-        })),
+        ...(effectiveSystem ? [{ role: 'system', content: effectiveSystem }] : []),
+        ...messages.map(translateMessage),
       ],
     };
+
+    if (format) body.response_format = { type: 'json_object' };
+
+    if (tools?.length) {
+      // Unified {name, description, input_schema} -> OpenAI's function shape
+      body.tools = tools.map(t => ({
+        type: 'function',
+        function: {
+          name: t.name,
+          description: t.description,
+          parameters: t.input_schema ?? t.parameters,
+        },
+      }));
+    }
 
     const res = await fetch(`${this.baseUrl}/chat/completions`, {
       method: 'POST',
@@ -59,22 +78,77 @@ class OpenAICompatibleLLMService extends LLMService {
     });
 
     if (!res.ok) {
-      throw new Error(`OpenAI-compatible provider ${res.status}: ${await res.text()}`);
+      await throwFromResponse(res, `OpenAI-compatible provider (${this.options.kind ?? 'openai-compatible'})`);
     }
 
     const data = await res.json();
     const choice = data.choices?.[0];
+
+    // Normalize tool calls into { id, name, input } shape (matches Anthropic)
+    const toolCalls = (choice?.message?.tool_calls ?? []).map(tc => ({
+      id: tc.id,
+      name: tc.function?.name,
+      input: safeParseJson(tc.function?.arguments) ?? {},
+    }));
+
     return {
       text: choice?.message?.content ?? '',
+      toolCalls: toolCalls.length ? toolCalls : undefined,
       raw: data,
       usage: {
         input_tokens: data.usage?.prompt_tokens,
         output_tokens: data.usage?.completion_tokens,
       },
-      stopReason: choice?.finish_reason,
+      stopReason: choice?.finish_reason === 'tool_calls' ? 'tool_use' : choice?.finish_reason,
       model: data.model,
     };
   }
+}
+
+function safeParseJson(s) {
+  if (typeof s !== 'string') return s;
+  try { return JSON.parse(s); } catch { return null; }
+}
+
+/**
+ * Translate a message into OpenAI-compat shape. Handles:
+ *  - Plain { role, content: string }
+ *  - Assistant with tool calls: { role:'assistant', content, toolCalls:[{id,name,input}] }
+ *  - Tool result: { role:'tool', tool_use_id, content } (Anthropic-ish) ->
+ *                 { role:'tool', tool_call_id, content } (OpenAI)
+ *  - Content array (Anthropic-style multi-block) is flattened to text.
+ */
+function translateMessage(m) {
+  // Tool result feedback
+  if (m.role === 'tool' || m.role === 'tool_result') {
+    const content = Array.isArray(m.content)
+      ? m.content.map(b => b.text ?? b.content ?? '').join('')
+      : String(m.content ?? '');
+    return {
+      role: 'tool',
+      tool_call_id: m.tool_call_id ?? m.tool_use_id,
+      content,
+    };
+  }
+  // Assistant with tool calls
+  if (m.role === 'assistant' && Array.isArray(m.toolCalls) && m.toolCalls.length) {
+    return {
+      role: 'assistant',
+      content: typeof m.content === 'string' ? m.content : null,
+      tool_calls: m.toolCalls.map(tc => ({
+        id: tc.id,
+        type: 'function',
+        function: { name: tc.name, arguments: JSON.stringify(tc.input ?? {}) },
+      })),
+    };
+  }
+  // Plain
+  return {
+    role: m.role,
+    content: typeof m.content === 'string'
+      ? m.content
+      : m.content.map(b => b.text ?? '').join(''),
+  };
 }
 
 module.exports = OpenAICompatibleLLMService;

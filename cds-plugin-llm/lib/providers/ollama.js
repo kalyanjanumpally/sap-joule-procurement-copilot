@@ -1,5 +1,6 @@
 const cds = require('@sap/cds');
 const LLMService = require('../LLMService');
+const { throwFromResponse } = require('../util');
 
 class OllamaLLMService extends LLMService {
   async init() {
@@ -11,7 +12,7 @@ class OllamaLLMService extends LLMService {
     this.log = cds.log('llm:ollama');
   }
 
-  async _chat({ model, maxTokens, system, messages }) {
+  async _chat({ model, maxTokens, system, messages, format, tools }) {
     const body = {
       model,
       stream: false,
@@ -27,6 +28,24 @@ class OllamaLLMService extends LLMService {
       ],
     };
 
+    // Ollama supports 'json' string (loose) or a JSON-schema object (strict,
+    // in recent Ollama versions). Pass the schema through if given.
+    if (format) body.format = format;
+
+    if (tools?.length) {
+      // Ollama uses OpenAI-style tool shape (supported on tools-capable models
+      // like qwen2.5, llama3.1+, mistral). Unified {name, description, input_schema}
+      // -> OpenAI function shape.
+      body.tools = tools.map(t => ({
+        type: 'function',
+        function: {
+          name: t.name,
+          description: t.description,
+          parameters: t.input_schema ?? t.parameters,
+        },
+      }));
+    }
+
     const res = await fetch(`${this.baseUrl}/api/chat`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -34,18 +53,24 @@ class OllamaLLMService extends LLMService {
     });
 
     if (!res.ok) {
-      throw new Error(`Ollama ${res.status}: ${await res.text()}`);
+      await throwFromResponse(res, 'Ollama');
     }
 
     const data = await res.json();
+    const toolCalls = (data.message?.tool_calls ?? []).map(tc => ({
+      id: tc.id ?? `ollama_${Math.random().toString(36).slice(2, 10)}`,
+      name: tc.function?.name,
+      input: tc.function?.arguments ?? {},
+    }));
     return {
       text: data.message?.content ?? '',
+      toolCalls: toolCalls.length ? toolCalls : undefined,
       raw: data,
       usage: {
         input_tokens: data.prompt_eval_count,
         output_tokens: data.eval_count,
       },
-      stopReason: data.done_reason,
+      stopReason: toolCalls.length ? 'tool_use' : data.done_reason,
       model: data.model,
     };
   }
@@ -59,7 +84,7 @@ class OllamaLLMService extends LLMService {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ model, prompt: text }),
       });
-      if (!res.ok) throw new Error(`Ollama ${res.status}: ${await res.text()}`);
+      if (!res.ok) await throwFromResponse(res, 'Ollama');
       const data = await res.json();
       embeddings.push(data.embedding);
     }

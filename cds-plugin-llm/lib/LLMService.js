@@ -1,18 +1,29 @@
 const cds = require('@sap/cds');
+const { withRetry } = require('./util');
 
 /**
  * Abstract LLM service. Providers extend this and implement _chat / _embed.
  *
  * Public surface:
- *   await llm.chat({ messages, system?, model?, maxTokens?, tools?, thinking?, cache? })
+ *   await llm.chat({
+ *     messages: [{ role, content }],
+ *     system?, model?, maxTokens?,
+ *     tools?,        // [{ name, description, input_schema }] - function calling
+ *     format?,       // JSON schema for structured output; enables .data on response
+ *     thinking?,     // Anthropic-only adaptive thinking config
+ *     cache?,        // Anthropic-only prompt caching on system
+ *     retries?,      // { max, baseMs, maxMs } - defaults { max:3, baseMs:500, maxMs:20000 }
+ *   })
  *   await llm.embed({ input, model? })
  *
- * Providers translate this shape to their native SDK.
+ * Providers translate this shape to their native SDK. Retries with exponential
+ * backoff on 429 / 5xx are applied automatically for every _chat call.
  */
 class LLMService extends cds.Service {
   async init() {
     this.modelId = this.options.modelId ?? this.options.model;
     this.defaultMaxTokens = this.options.maxTokens ?? 16000;
+    this.defaultRetries = this.options.retries;
     return super.init();
   }
 
@@ -26,17 +37,38 @@ class LLMService extends cds.Service {
       system: req.system,
       messages: req.messages,
       tools: req.tools,
+      format: req.format,
       thinking: req.thinking,
       cache: req.cache,
     };
-    return this._chat(merged);
+    const retryOpts = req.retries ?? this.defaultRetries ?? {};
+    const result = await withRetry(() => this._chat(merged), retryOpts);
+    // Structured-output post-process: if caller asked for format, try to parse
+    // .text as JSON and expose as .data. Providers that natively enforce the
+    // schema will succeed; ones that don't may leave stray prose around JSON.
+    if (req.format && typeof result.text === 'string' && result.text.length > 0) {
+      try {
+        result.data = JSON.parse(result.text);
+      } catch (_e) {
+        // Attempt to extract the first {...} block as a fallback
+        const match = result.text.match(/\{[\s\S]*\}/);
+        if (match) {
+          try { result.data = JSON.parse(match[0]); } catch (_e2) { /* leave undefined */ }
+        }
+      }
+    }
+    return result;
   }
 
   async embed(req) {
     if (!req || req.input == null) {
       throw new Error('embed() requires { input: string | string[] }');
     }
-    return this._embed({ model: req.model ?? this.modelId, input: req.input });
+    const retryOpts = req.retries ?? this.defaultRetries ?? {};
+    return withRetry(
+      () => this._embed({ model: req.model ?? this.modelId, input: req.input }),
+      retryOpts,
+    );
   }
 
   async _chat() {

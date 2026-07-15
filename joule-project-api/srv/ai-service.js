@@ -61,33 +61,32 @@ module.exports = class AIService extends cds.ApplicationService {
 
     this.on('explainInvoiceRisk', async (req) => {
       const { invoiceId, invoiceJson } = req.data;
-      const { text, usage, model } = await llm.chat({
+      const { data, usage, model, text } = await llm.chat({
         system: INVOICE_SYSTEM,
-        messages: [{
-          role: 'user',
-          content: `Invoice ${invoiceId}:\n${invoiceJson}\n\nReturn strictly as JSON with no code fences: {"risk":"low|medium|high", "rationale":"..."}`,
-        }],
+        messages: [{ role: 'user', content: `Invoice ${invoiceId}:\n${invoiceJson}` }],
         cache: true,
         maxTokens: 400,
+        // Structured output: plugin post-parses the response into `data`
+        format: {
+          type: 'object',
+          properties: {
+            risk: { type: 'string', enum: ['low', 'medium', 'high'] },
+            rationale: { type: 'string' },
+          },
+          required: ['risk', 'rationale'],
+          additionalProperties: false,
+        },
       });
 
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        req.error(500, `LLM returned non-JSON response: ${text.slice(0, 200)}`);
-        return;
-      }
-      let parsed;
-      try {
-        parsed = JSON.parse(jsonMatch[0]);
-      } catch {
-        req.error(500, `LLM returned unparseable JSON: ${jsonMatch[0].slice(0, 200)}`);
+      if (!data?.risk) {
+        req.error(500, `LLM did not return a parseable risk object: ${text?.slice(0, 200)}`);
         return;
       }
 
       return {
         invoiceId,
-        risk: parsed.risk,
-        rationale: parsed.rationale,
+        risk: data.risk,
+        rationale: data.rationale,
         tokensUsed: (usage?.input_tokens ?? 0) + (usage?.output_tokens ?? 0),
         model,
       };
