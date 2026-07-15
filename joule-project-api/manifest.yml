@@ -1,0 +1,16 @@
+---
+applications:
+  - name: joule-project-api
+    memory: 256M
+    disk_quota: 512M
+    instances: 1
+    buildpacks:
+      - nodejs_buildpack
+    stack: cflinuxfs4
+    command: npm start
+    health-check-type: port
+    env:
+      NODE_ENV: production
+      CDS_ENV: production
+      # GROQ_API_KEY set out-of-band via `cf set-env` (see manifest-README below)
+      # NOT committed to manifest.yml so the key stays out of git.

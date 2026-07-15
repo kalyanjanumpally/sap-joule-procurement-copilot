@@ -10,7 +10,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.111.0",
     "@sap/cds": "^9",
-    "@saptarishi/cds-plugin-llm": "file:../cds-plugin-llm",
+    "@saptarishi/cds-plugin-llm": "^0.2.0",
     "express": "^4"
   },
   "engines": {
@@ -35,6 +35,11 @@
           "modelId": "claude-opus-4-7"
         },
         "[production]": {
+          "kind": "llm-groq",
+          "service": "LLM",
+          "modelId": "llama-3.3-70b-versatile"
+        },
+        "[genai-hub]": {
           "kind": "llm-genai-hub",
           "service": "LLM",
           "credentials": {
@@ -44,9 +49,8 @@
         }
       },
       "auth": {
-        "[development]": {
-          "kind": "dummy"
-        }
+        "[development]": { "kind": "dummy" },
+        "[production]": { "kind": "dummy" }
       }
     }
   }
