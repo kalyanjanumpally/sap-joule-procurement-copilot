@@ -1,0 +1,94 @@
+{
+  "$schema": "https://sap.com/schemas/joule/skill/v1.json",
+  "name": "create-purchase-order",
+  "displayName": "Create a purchase order",
+  "description": "Creates a standard purchase order in S/4HANA Cloud. Requires supplier, material, quantity, and plant. Confirms with user before writing.",
+  "category": "procurement",
+  "version": "1.0.0",
+  "language": "en",
+  "confirmationRequired": true,
+  "utterances": [
+    "Create a PO for 100 units of MAT-1001 from vendor V-500",
+    "Order 500 pieces of material 4711 from supplier Acme",
+    "Raise a purchase order",
+    "New PO for MAT-2000, 250 units, plant 1710",
+    "Buy 1000 units of MAT-1001 from V-500 for plant 1710"
+  ],
+  "parameters": [
+    {
+      "name": "supplierId",
+      "type": "string",
+      "required": true,
+      "description": "Supplier / vendor ID (e.g. V-500). If user gave a company name, resolve via BusinessPartner.search first."
+    },
+    {
+      "name": "material",
+      "type": "string",
+      "required": true,
+      "description": "Material master number (e.g. MAT-1001 or 4711)."
+    },
+    {
+      "name": "quantity",
+      "type": "number",
+      "required": true,
+      "description": "Order quantity in the material's base unit of measure."
+    },
+    {
+      "name": "plant",
+      "type": "string",
+      "required": true,
+      "description": "Receiving plant code (e.g. 1710). If missing, ask the user."
+    },
+    {
+      "name": "purchasingGroup",
+      "type": "string",
+      "required": false,
+      "default": "001",
+      "description": "Purchasing group for the PO. Default 001."
+    },
+    {
+      "name": "documentDate",
+      "type": "date",
+      "required": false,
+      "description": "PO document date. Defaults to today."
+    }
+  ],
+  "actions": [
+    {
+      "actionRef": "PurchaseOrder.create",
+      "body": {
+        "PurchaseOrderType": "NB",
+        "Supplier": "{{ supplierId }}",
+        "PurchasingGroup": "{{ purchasingGroup | default: '001' }}",
+        "DocumentCurrency": "{{ currency | default: 'USD' }}",
+        "to_PurchaseOrderItem": [
+          {
+            "Material": "{{ material }}",
+            "OrderQuantity": "{{ quantity }}",
+            "Plant": "{{ plant }}",
+            "PurchaseOrderQuantityUnit": "{{ unit | default: 'EA' }}"
+          }
+        ]
+      }
+    }
+  ],
+  "prompt": {
+    "$ref": "./prompt.md"
+  },
+  "responseTemplate": {
+    "$ref": "./response-template.md"
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "purchaseOrderId": { "type": "string" },
+      "supplier": { "type": "string" },
+      "totalNet": { "type": "number" },
+      "currency": { "type": "string" },
+      "items": { "type": "array" }
+    }
+  },
+  "requiredScopes": [
+    "S4:Procurement:Write"
+  ]
+}

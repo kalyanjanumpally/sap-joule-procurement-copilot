@@ -1,0 +1,15 @@
+{
+  "Name": "s4hana-sandbox",
+  "Type": "HTTP",
+  "URL": "https://sandbox.api.sap.com/s4hanacloud",
+  "Authentication": "NoAuthentication",
+  "ProxyType": "Internet",
+  "Description": "S/4HANA Cloud sandbox on SAP Business Accelerator Hub. For the customer pilot, clone this destination as 's4hana-prod' and swap URL + auth to the tenant's client-certificate endpoint.",
+  "HTML5.DynamicDestination": "true",
+  "WebIDEEnabled": "true",
+  "APIKey": "<PASTE_YOUR_SANDBOX_API_KEY_FROM_api.sap.com>",
+  "sap-client": "100",
+  "sap.applicationdevelopment.actions.enabled": "true",
+  "sap.business.solution.portal.isc": "false",
+  "sap.processautomation.enabled": "true"
+}

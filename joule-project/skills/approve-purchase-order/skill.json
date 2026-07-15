@@ -1,0 +1,67 @@
+{
+  "$schema": "https://sap.com/schemas/joule/skill/v1.json",
+  "name": "approve-purchase-order",
+  "displayName": "Approve purchase order",
+  "description": "Releases a purchase order after showing its details for confirmation. Honors S/4HANA release strategy — the calling user must have the release authorization for the PO's release code.",
+  "category": "procurement",
+  "version": "1.0.0",
+  "language": "en",
+  "confirmationRequired": true,
+  "utterances": [
+    "Approve PO 4500000123",
+    "Release purchase order 4500000123",
+    "Approve the pending PO",
+    "Sign off on PO 4500000123",
+    "Release PO 4500000123 with code 01"
+  ],
+  "parameters": [
+    {
+      "name": "purchaseOrderId",
+      "type": "string",
+      "required": true,
+      "description": "Purchase order number (10 chars, e.g. 4500000123)."
+    },
+    {
+      "name": "releaseCode",
+      "type": "string",
+      "required": false,
+      "description": "S/4 release code (e.g. 01). If omitted, use the first code the current user is authorized for."
+    }
+  ],
+  "actions": [
+    {
+      "actionRef": "PurchaseOrder.get",
+      "input": {
+        "PurchaseOrder": "{{ purchaseOrderId }}",
+        "$expand": "to_PurchaseOrderItem,to_PurchaseOrderScheduleLine"
+      }
+    },
+    {
+      "actionRef": "PurchaseOrder.release",
+      "body": {
+        "PurchaseOrder": "{{ purchaseOrderId }}",
+        "ReleaseCode": "{{ releaseCode }}"
+      }
+    }
+  ],
+  "prompt": {
+    "$ref": "./prompt.md"
+  },
+  "responseTemplate": {
+    "$ref": "./response-template.md"
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "purchaseOrderId": { "type": "string" },
+      "released": { "type": "boolean" },
+      "supplier": { "type": "string" },
+      "totalNet": { "type": "number" },
+      "currency": { "type": "string" },
+      "releaseCode": { "type": "string" }
+    }
+  },
+  "requiredScopes": [
+    "S4:Procurement:Approve"
+  ]
+}

@@ -1,0 +1,69 @@
+{
+  "$schema": "https://sap.com/schemas/joule/skill/v1.json",
+  "name": "vendor-payment-status",
+  "displayName": "Vendor payment status (360 view)",
+  "description": "Summarizes a supplier's open invoices, average days-to-pay, credit block, and outstanding balance across company codes.",
+  "category": "finance",
+  "version": "1.0.0",
+  "language": "en",
+  "utterances": [
+    "What's the payment status of Acme Corp?",
+    "How much do we owe V-500?",
+    "Vendor 360 for Acme",
+    "Show open invoices for supplier V-500",
+    "Is Acme Corp on payment block?"
+  ],
+  "parameters": [
+    {
+      "name": "supplierRef",
+      "type": "string",
+      "required": true,
+      "description": "Supplier code (e.g. V-500) OR company name (e.g. 'Acme Corp'). If a name, resolve via BusinessPartner.search first."
+    },
+    {
+      "name": "companyCode",
+      "type": "string",
+      "required": false,
+      "description": "Restrict to one company code. Default: aggregate across all authorized company codes."
+    }
+  ],
+  "actions": [
+    {
+      "actionRef": "BusinessPartner.search",
+      "input": {
+        "$filter": "IsSupplier eq true and (BusinessPartner eq '{{ supplierRef }}' or contains(SearchTerm1, '{{ supplierRef }}'))",
+        "$top": 5,
+        "$select": "BusinessPartner,SearchTerm1,IsBlocked"
+      }
+    },
+    {
+      "actionRef": "SupplierInvoice.list",
+      "input": {
+        "$filter": "InvoicingParty eq '{{ resolvedSupplierId }}' and PaymentBlockingReason ne '3'{% if companyCode %} and CompanyCode eq '{{ companyCode }}'{% endif %}",
+        "$select": "SupplierInvoice,CompanyCode,DocumentDate,NetDueDate,InvoiceGrossAmount,DocumentCurrency,PaymentBlockingReason,ClearingDate"
+      }
+    }
+  ],
+  "prompt": {
+    "$ref": "./prompt.md"
+  },
+  "responseTemplate": {
+    "$ref": "./response-template.md"
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "supplierId": { "type": "string" },
+      "supplierName": { "type": "string" },
+      "isBlocked": { "type": "boolean" },
+      "openInvoiceCount": { "type": "integer" },
+      "outstandingByCurrency": { "type": "object" },
+      "avgDaysToPay": { "type": "number" },
+      "oldestOpenDaysOverdue": { "type": "integer" }
+    }
+  },
+  "requiredScopes": [
+    "S4:Finance:Read",
+    "S4:BusinessPartner:Read"
+  ]
+}

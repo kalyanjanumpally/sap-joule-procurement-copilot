@@ -1,0 +1,65 @@
+{
+  "$schema": "https://sap.com/schemas/joule/skill/v1.json",
+  "name": "check-material-stock",
+  "displayName": "Check material stock",
+  "description": "Returns current unrestricted-use stock for a material, optionally scoped to a plant or storage location. Highlights when stock is below the material's reorder point.",
+  "category": "supply-chain",
+  "version": "1.0.0",
+  "language": "en",
+  "utterances": [
+    "How much MAT-1001 do we have in plant 1710?",
+    "Stock of material 4711",
+    "Do we have MAT-1001 in stock?",
+    "Check inventory for 4711 in warehouse WH01",
+    "What's on hand for MAT-2000 across all plants?"
+  ],
+  "parameters": [
+    {
+      "name": "material",
+      "type": "string",
+      "required": true,
+      "description": "Material master number."
+    },
+    {
+      "name": "plant",
+      "type": "string",
+      "required": false,
+      "description": "Plant code. If omitted, returns totals across all plants the user is authorized for."
+    },
+    {
+      "name": "storageLocation",
+      "type": "string",
+      "required": false,
+      "description": "Storage location. If omitted, aggregates across all storage locations."
+    }
+  ],
+  "actions": [
+    {
+      "actionRef": "MaterialStock.list",
+      "input": {
+        "$filter": "Material eq '{{ material }}'{% if plant %} and Plant eq '{{ plant }}'{% endif %}{% if storageLocation %} and StorageLocation eq '{{ storageLocation }}'{% endif %}",
+        "$select": "Material,Plant,StorageLocation,MaterialBaseUnit,MatlWrhsStkQtyInMatlBaseUnit,ReorderQuantity"
+      }
+    }
+  ],
+  "prompt": {
+    "$ref": "./prompt.md"
+  },
+  "responseTemplate": {
+    "$ref": "./response-template.md"
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "material": { "type": "string" },
+      "totalQuantity": { "type": "number" },
+      "unit": { "type": "string" },
+      "reorderPoint": { "type": "number" },
+      "belowReorder": { "type": "boolean" },
+      "byLocation": { "type": "array" }
+    }
+  },
+  "requiredScopes": [
+    "S4:Inventory:Read"
+  ]
+}

@@ -1,0 +1,67 @@
+openapi: 3.0.3
+info:
+  title: MaterialStock — S/4HANA Cloud
+  description: |
+    Subset of `API_MATERIAL_STOCK_SRV` for the `check-material-stock` skill.
+    Reports current warehouse stock in the material's base UoM.
+  version: 1.0.0
+servers:
+  - url: /API_MATERIAL_STOCK_SRV
+security:
+  - APIKeyHeader: []
+paths:
+  /A_MaterialStock:
+    get:
+      operationId: MaterialStock.list
+      summary: List material stock rows (per material / plant / storage location)
+      parameters:
+        - { in: query, name: $filter, schema: { type: string } }
+        - { in: query, name: $select, schema: { type: string } }
+        - { in: query, name: $top, schema: { type: integer, default: 20 } }
+      responses:
+        "200":
+          description: OData collection
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  d:
+                    type: object
+                    properties:
+                      results:
+                        type: array
+                        items: { $ref: "#/components/schemas/MaterialStock" }
+  /A_MaterialStock(Material='{Material}',Plant='{Plant}',StorageLocation='{StorageLocation}'):
+    get:
+      operationId: MaterialStock.get
+      parameters:
+        - { in: path, name: Material, required: true, schema: { type: string } }
+        - { in: path, name: Plant, required: true, schema: { type: string } }
+        - { in: path, name: StorageLocation, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Stock entity
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  d: { $ref: "#/components/schemas/MaterialStock" }
+components:
+  securitySchemes:
+    APIKeyHeader:
+      type: apiKey
+      in: header
+      name: APIKey
+  schemas:
+    MaterialStock:
+      type: object
+      properties:
+        Material: { type: string }
+        Plant: { type: string }
+        StorageLocation: { type: string }
+        MaterialBaseUnit: { type: string }
+        MatlWrhsStkQtyInMatlBaseUnit: { type: number, format: double, description: Current unrestricted-use stock }
+        ReorderQuantity: { type: number, format: double, description: Configured reorder point }
+        StockOwner: { type: string }

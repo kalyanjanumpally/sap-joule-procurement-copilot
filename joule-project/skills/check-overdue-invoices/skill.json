@@ -1,0 +1,80 @@
+{
+  "$schema": "https://sap.com/schemas/joule/skill/v1.json",
+  "name": "check-overdue-invoices",
+  "displayName": "Check overdue supplier invoices",
+  "description": "Lists supplier invoices whose net due date is in the past. Optionally filters by company code, vendor, or a maximum days-overdue.",
+  "category": "finance",
+  "version": "1.0.0",
+  "language": "en",
+  "utterances": [
+    "Show me overdue supplier invoices",
+    "Which invoices are past due",
+    "List overdue invoices for company code 1710",
+    "Overdue invoices from vendor V-500",
+    "Any invoices more than 30 days late",
+    "Show unpaid invoices past their due date"
+  ],
+  "parameters": [
+    {
+      "name": "companyCode",
+      "type": "string",
+      "required": false,
+      "description": "S/4HANA Company Code (e.g. 1710). If omitted, all company codes the user is authorized for are returned.",
+      "extractionHint": "Extract 4-digit company code from phrases like 'for CoCo 1710' or 'company 1010'."
+    },
+    {
+      "name": "supplierId",
+      "type": "string",
+      "required": false,
+      "description": "Supplier / vendor ID (e.g. V-500 or 0010300000).",
+      "extractionHint": "Match on vendor code or, if a company name is given, resolve via BusinessPartner action first."
+    },
+    {
+      "name": "minDaysOverdue",
+      "type": "integer",
+      "required": false,
+      "default": 1,
+      "description": "Minimum days past NetDueDate to include. Default 1."
+    }
+  ],
+  "actions": [
+    {
+      "actionRef": "SupplierInvoice.list",
+      "input": {
+        "$filter": "PaymentBlockingReason eq '' and NetDueDate lt now() sub duration('P{{ minDaysOverdue | default: 1 }}D'){% if companyCode %} and CompanyCode eq '{{ companyCode }}'{% endif %}{% if supplierId %} and InvoicingParty eq '{{ supplierId }}'{% endif %}",
+        "$orderby": "NetDueDate asc",
+        "$top": 20,
+        "$select": "SupplierInvoice,InvoicingParty,InvoicingPartyName,CompanyCode,DocumentDate,NetDueDate,InvoiceGrossAmount,DocumentCurrency"
+      }
+    }
+  ],
+  "prompt": {
+    "$ref": "./prompt.md"
+  },
+  "responseTemplate": {
+    "$ref": "./response-template.md"
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "invoices": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "invoiceId": { "type": "string" },
+            "vendor": { "type": "string" },
+            "amount": { "type": "number" },
+            "currency": { "type": "string" },
+            "daysOverdue": { "type": "integer" }
+          }
+        }
+      },
+      "totalCount": { "type": "integer" },
+      "totalAmountByCurrency": { "type": "object" }
+    }
+  },
+  "requiredScopes": [
+    "S4:Finance:Read"
+  ]
+}

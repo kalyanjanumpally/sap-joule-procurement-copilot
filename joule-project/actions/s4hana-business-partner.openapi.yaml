@@ -1,0 +1,67 @@
+openapi: 3.0.3
+info:
+  title: BusinessPartner — S/4HANA Cloud
+  description: |
+    Subset of `API_BUSINESS_PARTNER` used to resolve supplier codes from names,
+    and to fetch supplier attributes (block status, address).
+  version: 1.0.0
+servers:
+  - url: /API_BUSINESS_PARTNER
+security:
+  - APIKeyHeader: []
+paths:
+  /A_BusinessPartner:
+    get:
+      operationId: BusinessPartner.search
+      summary: Search business partners by name / code / search term
+      parameters:
+        - { in: query, name: $filter, schema: { type: string } }
+        - { in: query, name: $select, schema: { type: string } }
+        - { in: query, name: $top, schema: { type: integer, default: 10 } }
+      responses:
+        "200":
+          description: OData collection
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  d:
+                    type: object
+                    properties:
+                      results:
+                        type: array
+                        items: { $ref: "#/components/schemas/BusinessPartner" }
+  /A_BusinessPartner('{BusinessPartner}'):
+    get:
+      operationId: BusinessPartner.get
+      parameters:
+        - { in: path, name: BusinessPartner, required: true, schema: { type: string } }
+        - { in: query, name: $expand, schema: { type: string } }
+      responses:
+        "200":
+          description: Entity
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  d: { $ref: "#/components/schemas/BusinessPartner" }
+components:
+  securitySchemes:
+    APIKeyHeader:
+      type: apiKey
+      in: header
+      name: APIKey
+  schemas:
+    BusinessPartner:
+      type: object
+      properties:
+        BusinessPartner: { type: string, description: 10-char BP number }
+        BusinessPartnerCategory: { type: string, description: "1=Person, 2=Organization, 3=Group" }
+        BusinessPartnerFullName: { type: string }
+        SearchTerm1: { type: string }
+        IsSupplier: { type: boolean }
+        IsCustomer: { type: boolean }
+        IsBlocked: { type: boolean }
+        CreationDate: { type: string, format: date }

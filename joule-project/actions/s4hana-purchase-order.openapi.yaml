@@ -1,0 +1,150 @@
+openapi: 3.0.3
+info:
+  title: PurchaseOrder — S/4HANA Cloud
+  description: |
+    Subset of the Purchase Order (A2X) OData V2 service. Backed by
+    `API_PURCHASEORDER_PROCESS_SRV`. Covers list/get/create/release operations
+    the procurement skills invoke.
+  version: 1.0.0
+servers:
+  - url: /API_PURCHASEORDER_PROCESS_SRV
+security:
+  - APIKeyHeader: []
+paths:
+  /A_PurchaseOrder:
+    get:
+      operationId: PurchaseOrder.list
+      summary: List purchase orders (OData query)
+      parameters:
+        - { in: query, name: $filter, schema: { type: string } }
+        - { in: query, name: $select, schema: { type: string } }
+        - { in: query, name: $expand, schema: { type: string } }
+        - { in: query, name: $top, schema: { type: integer, default: 20 } }
+      responses:
+        "200":
+          description: OData collection
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  d:
+                    type: object
+                    properties:
+                      results:
+                        type: array
+                        items: { $ref: "#/components/schemas/PurchaseOrder" }
+    post:
+      operationId: PurchaseOrder.create
+      summary: Create a purchase order
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PurchaseOrderCreate" }
+      responses:
+        "201":
+          description: PO created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  d: { $ref: "#/components/schemas/PurchaseOrder" }
+  /A_PurchaseOrder('{PurchaseOrder}'):
+    get:
+      operationId: PurchaseOrder.get
+      parameters:
+        - { in: path, name: PurchaseOrder, required: true, schema: { type: string } }
+        - { in: query, name: $expand, schema: { type: string } }
+      responses:
+        "200":
+          description: OData entity
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  d: { $ref: "#/components/schemas/PurchaseOrder" }
+  /SetReleaseStatus:
+    post:
+      operationId: PurchaseOrder.release
+      summary: Release / approve a purchase order via S/4 release strategy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [PurchaseOrder, ReleaseCode]
+              properties:
+                PurchaseOrder: { type: string }
+                ReleaseCode: { type: string, description: "S/4 release code, e.g. 01" }
+      responses:
+        "200":
+          description: PO released
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  d:
+                    type: object
+                    properties:
+                      PurchaseOrder: { type: string }
+                      ReleaseIsCompletelyEffected: { type: boolean }
+components:
+  securitySchemes:
+    APIKeyHeader:
+      type: apiKey
+      in: header
+      name: APIKey
+  schemas:
+    PurchaseOrder:
+      type: object
+      properties:
+        PurchaseOrder: { type: string, description: 10-char PO number }
+        PurchaseOrderType: { type: string, default: "NB" }
+        Supplier: { type: string }
+        SupplierName: { type: string }
+        CompanyCode: { type: string }
+        PurchasingGroup: { type: string }
+        DocumentCurrency: { type: string }
+        CreationDate: { type: string, format: date }
+        PurchaseOrderNetAmount: { type: number, format: double }
+        to_PurchaseOrderItem:
+          type: object
+          properties:
+            results:
+              type: array
+              items: { $ref: "#/components/schemas/PurchaseOrderItem" }
+    PurchaseOrderItem:
+      type: object
+      properties:
+        PurchaseOrder: { type: string }
+        PurchaseOrderItem: { type: string }
+        Material: { type: string }
+        Plant: { type: string }
+        OrderQuantity: { type: number }
+        PurchaseOrderQuantityUnit: { type: string }
+        NetPriceAmount: { type: number }
+        DocumentCurrency: { type: string }
+    PurchaseOrderCreate:
+      type: object
+      required: [PurchaseOrderType, Supplier, to_PurchaseOrderItem]
+      properties:
+        PurchaseOrderType: { type: string, example: "NB" }
+        Supplier: { type: string }
+        PurchasingGroup: { type: string }
+        DocumentCurrency: { type: string }
+        to_PurchaseOrderItem:
+          type: array
+          items:
+            type: object
+            required: [Material, OrderQuantity, Plant]
+            properties:
+              Material: { type: string }
+              OrderQuantity: { type: number }
+              Plant: { type: string }
+              PurchaseOrderQuantityUnit: { type: string, default: "EA" }
+              NetPriceAmount: { type: number }

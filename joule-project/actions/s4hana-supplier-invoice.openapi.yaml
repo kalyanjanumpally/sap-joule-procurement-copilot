@@ -1,0 +1,91 @@
+openapi: 3.0.3
+info:
+  title: SupplierInvoice — S/4HANA Cloud
+  description: |
+    Subset of the Supplier Invoice (A2X) OData V2 service used by the finance skills.
+    Backed by the real S/4HANA API `API_SUPPLIERINVOICE_PROCESS_SRV`.
+  version: 1.0.0
+servers:
+  - url: /API_SUPPLIERINVOICE_PROCESS_SRV
+    description: Path relative to the `s4hana-sandbox` BTP destination
+security:
+  - APIKeyHeader: []
+paths:
+  /A_SupplierInvoice:
+    get:
+      operationId: SupplierInvoice.list
+      summary: List supplier invoices with OData filtering
+      parameters:
+        - in: query
+          name: $filter
+          schema: { type: string }
+          description: OData filter expression (e.g. `NetDueDate lt datetime'2026-01-01T00:00:00'`)
+        - in: query
+          name: $select
+          schema: { type: string }
+        - in: query
+          name: $orderby
+          schema: { type: string }
+        - in: query
+          name: $top
+          schema: { type: integer, default: 20, maximum: 100 }
+        - in: query
+          name: $skip
+          schema: { type: integer }
+      responses:
+        "200":
+          description: OData collection of invoices
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  d:
+                    type: object
+                    properties:
+                      results:
+                        type: array
+                        items: { $ref: "#/components/schemas/SupplierInvoice" }
+  /A_SupplierInvoice(SupplierInvoice='{SupplierInvoice}',FiscalYear='{FiscalYear}'):
+    get:
+      operationId: SupplierInvoice.get
+      summary: Retrieve a single supplier invoice
+      parameters:
+        - in: path
+          name: SupplierInvoice
+          required: true
+          schema: { type: string }
+        - in: path
+          name: FiscalYear
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OData entity
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  d: { $ref: "#/components/schemas/SupplierInvoice" }
+components:
+  securitySchemes:
+    APIKeyHeader:
+      type: apiKey
+      in: header
+      name: APIKey
+  schemas:
+    SupplierInvoice:
+      type: object
+      properties:
+        SupplierInvoice: { type: string, description: 10-char invoice document number }
+        FiscalYear: { type: string }
+        CompanyCode: { type: string }
+        DocumentDate: { type: string, format: date }
+        NetDueDate: { type: string, format: date }
+        InvoicingParty: { type: string, description: Supplier / vendor ID }
+        InvoicingPartyName: { type: string }
+        InvoiceGrossAmount: { type: number, format: double }
+        DocumentCurrency: { type: string }
+        PaymentBlockingReason: { type: string }
+        ClearingDate: { type: string, format: date, nullable: true }

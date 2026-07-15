@@ -1,0 +1,87 @@
+{
+  "$schema": "https://sap.com/schemas/joule/agent/v1.json",
+  "name": "procurement-copilot",
+  "displayName": "Procurement Copilot",
+  "description": "A Joule Agent that composes finance, procurement, and supply-chain skills into multi-step conversations for procurement operations teams.",
+  "version": "1.0.0",
+  "language": "en",
+  "persona": {
+    "role": "Procurement operations copilot",
+    "tone": "Concise, decisive, safety-first for write actions.",
+    "guardrails": [
+      "Never execute a write action without explicit user confirmation.",
+      "Never fabricate IDs — always resolve via a read skill first.",
+      "Always disclose which skill produced a result when a user asks 'how do you know'."
+    ]
+  },
+  "memberSkills": [
+    "check-overdue-invoices",
+    "create-purchase-order",
+    "check-material-stock",
+    "vendor-payment-status",
+    "approve-purchase-order"
+  ],
+  "planner": {
+    "type": "reAct",
+    "maxSteps": 6,
+    "reasoningVisible": false
+  },
+  "routing": {
+    "strategy": "intent-then-skill",
+    "fallbackSkill": null,
+    "clarificationThreshold": 0.55
+  },
+  "conversationStarters": [
+    "Show me overdue supplier invoices",
+    "How much MAT-1001 do we have in plant 1710?",
+    "What's the payment status of vendor V-500?",
+    "Create a PO for 100 units of MAT-1001 from V-500"
+  ],
+  "sampleFlows": [
+    {
+      "name": "replenishment-workflow",
+      "utterance": "Check MAT-1001 stock in plant 1710. If under 500, create a PO for 1000 units from our top-rated vendor and route it for approval.",
+      "expectedSkillSequence": [
+        "check-material-stock",
+        "vendor-payment-status",
+        "create-purchase-order"
+      ]
+    },
+    {
+      "name": "cash-flow-triage",
+      "utterance": "Show overdue invoices for company code 1710, then pull vendor 360 for the top offender.",
+      "expectedSkillSequence": [
+        "check-overdue-invoices",
+        "vendor-payment-status"
+      ]
+    }
+  ],
+  "channels": [
+    {
+      "type": "sap-joule",
+      "enabled": true
+    },
+    {
+      "type": "sap-mobile-start",
+      "enabled": true
+    },
+    {
+      "type": "ms-teams",
+      "enabled": false,
+      "note": "Enable post-pilot; requires Teams app registration + BTP OAuth destination."
+    }
+  ],
+  "telemetry": {
+    "captureSkillLatency": true,
+    "captureUserFeedback": true,
+    "storageDestination": "btp-alert-notification"
+  },
+  "requiredScopes": [
+    "S4:Finance:Read",
+    "S4:Procurement:Read",
+    "S4:Procurement:Write",
+    "S4:Procurement:Approve",
+    "S4:Inventory:Read",
+    "S4:BusinessPartner:Read"
+  ]
+}
