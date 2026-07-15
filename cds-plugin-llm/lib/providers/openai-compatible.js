@@ -29,10 +29,32 @@ class OpenAICompatibleLLMService extends LLMService {
       ?? 'https://api.openai.com/v1';
     const envKey = this.options.apiKeyEnv ?? 'OPENAI_API_KEY';
     this.apiKey = creds.apiKey ?? process.env[envKey];
-    if (!this.apiKey) {
+    // Subclasses (e.g. GenAI Hub with OAuth) may not use apiKey at all;
+    // they override _authHeader() and can skip this check by setting
+    // options.skipApiKeyCheck = true.
+    if (!this.apiKey && !this.options.skipApiKeyCheck) {
       throw new Error(`${this.constructor.name} requires credentials.apiKey or ${envKey} env var`);
     }
     this.log = cds.log(`llm:${this.options.kind ?? 'openai-compatible'}`);
+  }
+
+  /**
+   * Hook: return the URL to POST /chat/completions to. Subclasses may override
+   * for path variations (e.g. GenAI Hub uses .../deployments/{id}/chat/completions).
+   */
+  _endpoint() {
+    return `${this.baseUrl}/chat/completions`;
+  }
+
+  /**
+   * Hook: return request headers. Async so subclasses can fetch OAuth tokens.
+   * Subclasses override to add resource-group headers, replace Bearer auth, etc.
+   */
+  async _headers() {
+    return {
+      'content-type': 'application/json',
+      'authorization': `Bearer ${this.apiKey}`,
+    };
   }
 
   async _chat({ model, maxTokens, system, messages, format, tools }) {
@@ -68,12 +90,9 @@ class OpenAICompatibleLLMService extends LLMService {
       }));
     }
 
-    const res = await fetch(`${this.baseUrl}/chat/completions`, {
+    const res = await fetch(this._endpoint(), {
       method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        authorization: `Bearer ${this.apiKey}`,
-      },
+      headers: await this._headers(),
       body: JSON.stringify(body),
     });
 

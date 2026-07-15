@@ -1,5 +1,26 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
+
+// Stub @sap/cds so tests run without installing it (which conflicts with
+// consuming apps' node_modules when using file: deps during development).
+const Module = require('module');
+const STUB_PATH = '/tmp/__cds_stub_llm_test__';
+require.cache[STUB_PATH] = {
+  exports: {
+    Service: class {
+      constructor(name, model, options) { this.options = options ?? {}; }
+      async init() {}
+    },
+    log: () => ({ info: () => {}, warn: () => {}, error: () => {}, debug: () => {} }),
+  },
+  loaded: true,
+};
+const origResolve = Module._resolveFilename;
+Module._resolveFilename = function(request, ...rest) {
+  if (request === '@sap/cds') return STUB_PATH;
+  return origResolve.call(this, request, ...rest);
+};
+
 const LLMService = require('../lib/LLMService');
 
 class StubProvider extends LLMService {

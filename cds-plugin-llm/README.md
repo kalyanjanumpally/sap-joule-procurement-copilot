@@ -2,7 +2,7 @@
 
 LLM-agnostic AI service for SAP CAP. One unified interface — swap between Anthropic (Claude), Ollama (local), Groq, any OpenAI-compatible endpoint, or SAP Generative AI Hub without changing your handler code.
 
-**Status:** alpha (v0.3.0). Anthropic + Ollama + Groq + OpenAI-compatible providers work today; GenAI Hub is a stub with wiring instructions.
+**Status:** alpha (v0.4.0). All five providers implemented. GenAI Hub is built to SAP's documented API contract and unit-tested against mocks; needs an AI Core extended plan to live-verify (feedback from anyone with access very welcome).
 
 ## Why
 
@@ -52,7 +52,7 @@ Set the appropriate env var (see `.env.example`):
 | `llm-ollama` | Local Ollama daemon | Free | Working |
 | `llm-groq` | Groq's hosted Llama/Mixtral/Qwen (sub-second inference) | Generous free tier | Working |
 | `llm-openai-compatible` | Any endpoint speaking OpenAI's `/chat/completions` (OpenAI, Together, Fireworks, DeepSeek direct, LM Studio, LocalAI...) | Varies | Working |
-| `llm-genai-hub` | SAP AI Core / GenAI Hub | Paid (extended plan) | Stub — see `lib/providers/genai-hub.js` |
+| `llm-genai-hub` | SAP AI Core / Generative AI Hub | Paid (extended plan) | Working (mock-verified; live-verify pending community access) |
 
 ## Use
 
@@ -169,6 +169,92 @@ if (turn1.toolCalls?.length) {
 ```
 
 Works across providers with matching `{ id, name, input }` shape. Individual model quality varies for multi-tool scenarios — llama-3.3-70b on Groq is solid for single-tool cases; Claude and qwen2.5 are more reliable for chained tool use.
+
+## SAP Generative AI Hub setup
+
+The `llm-genai-hub` kind targets a **deployment** in your BTP AI Core instance. Prerequisites:
+
+1. **Provision AI Core** — BTP Cockpit → Service Marketplace → *AI Core* → **extended** plan (free plan does not include Generative AI Hub).
+2. **Create a resource group** (or use `default`).
+3. **Deploy a model** via SAP AI Launchpad, `ai-api-cli`, or the SDK — e.g. `gpt-4o`, `mistral-large-instruct`, `claude-3-5-sonnet`. Note the deployment ID.
+4. **Configure the plugin** — three ways depending on where your CAP app runs.
+
+### On BTP Cloud Foundry (recommended)
+
+Bind the AI Core service instance to your CAP app:
+
+```sh
+cf bind-service <your-app> <ai-core-instance>
+cf restage <your-app>
+```
+
+Then set only the deployment ID (credentials auto-discovered from `VCAP_SERVICES`):
+
+```sh
+cf set-env <your-app> AICORE_DEPLOYMENT_ID <deployment-id>
+cf set-env <your-app> AICORE_RESOURCE_GROUP default   # optional; defaults to 'default'
+```
+
+In `package.json`:
+
+```json
+{
+  "cds": { "requires": { "llm": {
+    "[production]": { "kind": "llm-genai-hub", "modelId": "gpt-4o" }
+  }}}
+}
+```
+
+### On Kyma
+
+Attach the service binding manifest, then set the same env vars via a ConfigMap or Secret. The `VCAP_SERVICES` layout is preserved by the SBO (Service Binding Operator).
+
+### Local dev pointing at a BTP-hosted AI Core
+
+Extract the service key JSON from BTP Cockpit (Service Instance → Service Keys → View). Put values in `.env`:
+
+```
+AICORE_API_URL=https://api.ai.prod.eu-central-1.aws.ml.hana.ondemand.com
+AICORE_AUTH_URL=https://<subaccount>.authentication.<region>.hana.ondemand.com
+AICORE_CLIENT_ID=sb-...
+AICORE_CLIENT_SECRET=...
+AICORE_DEPLOYMENT_ID=abc123
+AICORE_MODEL=gpt-4o
+```
+
+Or pass explicitly in `package.json`:
+
+```json
+{
+  "cds": { "requires": { "llm": {
+    "[genai-hub]": {
+      "kind": "llm-genai-hub",
+      "modelId": "gpt-4o",
+      "credentials": {
+        "aiCoreUrl":     "https://api.ai.prod.eu-central-1.aws.ml.hana.ondemand.com",
+        "tokenUrl":      "https://<subaccount>.authentication.<region>.hana.ondemand.com",
+        "clientId":      "sb-...",
+        "clientSecret":  "...",
+        "deploymentId":  "abc123",
+        "resourceGroup": "default"
+      }
+    }
+  }}}
+}
+```
+
+### What it handles for you
+
+- OAuth2 client-credentials flow against XSUAA
+- Token caching + refresh (60s before expiry)
+- `AI-Resource-Group` header
+- Deployment-based inference endpoint construction
+- `VCAP_SERVICES.aicore` auto-discovery when the service is bound
+
+### Known limitations (v0.4.0)
+
+- **OpenAI-shape only.** Deployments that expose the OpenAI `/chat/completions` shape (GPT, Mistral, Llama, Gemini, and Anthropic-via-shim) work. Native Anthropic-shape deployments (Claude via `/invoke`) are not yet supported — use the `llm-anthropic` kind directly for Claude.
+- **Not yet live-verified.** Built to the SAP-documented API contract and unit-tested against mocks. Live verification against an AI Core `extended` deployment is the next contribution wanted.
 
 ## Automatic retries (new in v0.3.0)
 
