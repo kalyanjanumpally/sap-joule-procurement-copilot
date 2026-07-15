@@ -19,7 +19,8 @@
     "create-purchase-order",
     "check-material-stock",
     "vendor-payment-status",
-    "approve-purchase-order"
+    "approve-purchase-order",
+    "summarize-po"
   ],
   "planner": {
     "type": "reAct",
@@ -35,7 +36,8 @@
     "Show me overdue supplier invoices",
     "How much MAT-1001 do we have in plant 1710?",
     "What's the payment status of vendor V-500?",
-    "Create a PO for 100 units of MAT-1001 from V-500"
+    "Create a PO for 100 units of MAT-1001 from V-500",
+    "Summarize PO 4500000123 before I approve it"
   ],
   "sampleFlows": [
     {
@@ -53,6 +55,14 @@
       "expectedSkillSequence": [
         "check-overdue-invoices",
         "vendor-payment-status"
+      ]
+    },
+    {
+      "name": "approve-with-summary",
+      "utterance": "Summarize PO 4500000123 for me, then release it.",
+      "expectedSkillSequence": [
+        "summarize-po",
+        "approve-purchase-order"
       ]
     }
   ],

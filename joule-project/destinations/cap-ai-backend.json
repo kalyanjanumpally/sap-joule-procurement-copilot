@@ -1,0 +1,15 @@
+{
+  "Name": "cap-ai-backend",
+  "Type": "HTTP",
+  "URL": "https://<joule-project-api-route>.cfapps.<region>.hana.ondemand.com",
+  "Authentication": "OAuth2ClientCredentials",
+  "ProxyType": "Internet",
+  "Description": "CAP backend hosting LLM-backed AI actions (summarizePurchaseOrder, explainInvoiceRisk). Swap URL to your Cloud Foundry / Kyma route after deploying joule-project-api. For local dev, use http://localhost:4004 and Authentication: NoAuthentication.",
+  "HTML5.DynamicDestination": "true",
+  "WebIDEEnabled": "true",
+  "tokenServiceURL": "https://<subaccount>.authentication.<region>.hana.ondemand.com/oauth/token",
+  "clientId": "<PASTE_XSUAA_CLIENT_ID>",
+  "clientSecret": "<PASTE_XSUAA_CLIENT_SECRET>",
+  "sap.processautomation.enabled": "true",
+  "sap.applicationdevelopment.actions.enabled": "true"
+}

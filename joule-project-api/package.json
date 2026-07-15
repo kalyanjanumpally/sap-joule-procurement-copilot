@@ -1,0 +1,48 @@
+{
+  "name": "joule-project-api",
+  "version": "0.1.0",
+  "description": "CAP backend for the Procurement Copilot. Hosts LLM-backed actions (summarize, explain) callable from Joule as skill actions.",
+  "private": true,
+  "scripts": {
+    "start": "cds-serve",
+    "watch": "cds watch"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.111.0",
+    "@sap/cds": "^9",
+    "cds-plugin-llm": "file:../cds-plugin-llm",
+    "express": "^4"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "cds": {
+    "requires": {
+      "llm": {
+        "[development]": {
+          "kind": "llm-ollama",
+          "service": "LLM",
+          "modelId": "qwen2.5:14b"
+        },
+        "[hybrid]": {
+          "kind": "llm-anthropic",
+          "service": "LLM",
+          "modelId": "claude-opus-4-7"
+        },
+        "[production]": {
+          "kind": "llm-genai-hub",
+          "service": "LLM",
+          "credentials": {
+            "deploymentId": "<AICORE_DEPLOYMENT_ID>",
+            "resourceGroup": "default"
+          }
+        }
+      },
+      "auth": {
+        "[development]": {
+          "kind": "dummy"
+        }
+      }
+    }
+  }
+}

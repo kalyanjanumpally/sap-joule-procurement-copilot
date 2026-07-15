@@ -1,0 +1,93 @@
+openapi: 3.0.3
+info:
+  title: AI Assist — CAP backend (joule-project-api)
+  description: |
+    LLM-backed actions hosted by the CAP app at `/ai`. Called from Joule
+    skills for tasks that need natural-language synthesis (approver-ready PO
+    summaries, AP invoice risk triage) on top of raw S/4HANA data.
+
+    Provider (Claude, Ollama, or SAP GenAI Hub) is selected server-side by
+    the `cds.requires.llm` profile — no change to this contract when the
+    backend swaps providers.
+  version: 1.0.0
+servers:
+  - url: /ai
+    description: CAP service root (see destinations/cap-ai-backend.json)
+security:
+  - XsUaaBearer: []
+paths:
+  /summarizePurchaseOrder:
+    post:
+      operationId: AIAssist.summarizePO
+      summary: Summarize a purchase order for an approver in 2 sentences
+      description: |
+        Called after a read skill (e.g. `PurchaseOrder.get`) has fetched the
+        PO. Pass the full PO payload as JSON in `poJson`; the CAP service
+        prompts the configured LLM and returns a plain-text summary.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [purchaseOrderId, poJson]
+              properties:
+                purchaseOrderId:
+                  type: string
+                  description: PO number (10 chars, e.g. 4500000123).
+                poJson:
+                  type: string
+                  description: The PO object as a JSON-encoded string.
+      responses:
+        "200":
+          description: Summary + usage metadata
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  purchaseOrderId: { type: string }
+                  summary: { type: string, description: "2-sentence summary." }
+                  tokensUsed: { type: integer }
+                  model: { type: string, description: "e.g. claude-opus-4-7." }
+
+  /explainInvoiceRisk:
+    post:
+      operationId: AIAssist.explainInvoiceRisk
+      summary: Classify supplier invoice risk (low/medium/high) + rationale
+      description: |
+        Called after a read skill has fetched a supplier invoice. Returns a
+        structured risk rating for AP triage.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [invoiceId, invoiceJson]
+              properties:
+                invoiceId: { type: string }
+                invoiceJson:
+                  type: string
+                  description: The invoice object as a JSON-encoded string.
+      responses:
+        "200":
+          description: Structured risk rating
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  invoiceId: { type: string }
+                  risk:
+                    type: string
+                    enum: [low, medium, high]
+                  rationale: { type: string }
+                  tokensUsed: { type: integer }
+                  model: { type: string }
+components:
+  securitySchemes:
+    XsUaaBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

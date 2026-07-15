@@ -1,0 +1,59 @@
+{
+  "$schema": "https://sap.com/schemas/joule/skill/v1.json",
+  "name": "summarize-po",
+  "displayName": "Summarize purchase order",
+  "description": "Fetches a purchase order from S/4HANA and returns a 2-sentence approver-ready summary produced by the CAP AI backend (Claude via cds-plugin-llm; swaps to SAP GenAI Hub in production).",
+  "category": "procurement",
+  "version": "1.0.0",
+  "language": "en",
+  "confirmationRequired": false,
+  "utterances": [
+    "Summarize PO 4500000123",
+    "Give me a quick read on PO 4500000123",
+    "TLDR purchase order 4500000123",
+    "What's PO 4500000123 about",
+    "Brief me on 4500000123 before I approve"
+  ],
+  "parameters": [
+    {
+      "name": "purchaseOrderId",
+      "type": "string",
+      "required": true,
+      "description": "Purchase order number (10 chars, e.g. 4500000123)."
+    }
+  ],
+  "actions": [
+    {
+      "actionRef": "PurchaseOrder.get",
+      "input": {
+        "PurchaseOrder": "{{ purchaseOrderId }}",
+        "$expand": "to_PurchaseOrderItem,to_PurchaseOrderScheduleLine"
+      }
+    },
+    {
+      "actionRef": "AIAssist.summarizePO",
+      "body": {
+        "purchaseOrderId": "{{ purchaseOrderId }}",
+        "poJson": "{{ steps[0].d | tojson }}"
+      }
+    }
+  ],
+  "prompt": {
+    "$ref": "./prompt.md"
+  },
+  "responseTemplate": {
+    "$ref": "./response-template.md"
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "purchaseOrderId": { "type": "string" },
+      "summary": { "type": "string" },
+      "model": { "type": "string" },
+      "tokensUsed": { "type": "integer" }
+    }
+  },
+  "requiredScopes": [
+    "S4:Procurement:Read"
+  ]
+}
