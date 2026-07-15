@@ -132,4 +132,4 @@ Feedback, PRs, and — especially — a real implementation of the GenAI Hub pro
 I work on SAP Joule and S/4HANA Cloud engagements, focused on procurement, finance, and supply-chain copilot design. If you are exploring Joule adoption or looking at how to package CAP-based AI microservices for a customer pitch, get in touch:
 
 - LinkedIn: [linkedin.com/in/kalyanjanumpally](https://linkedin.com/in/kalyanjanumpally)
-- Email: jkalyan@alumni.iitm.ac.in
+- Email: KALYAN.JANUMPALLY@Saptarishi.tech
