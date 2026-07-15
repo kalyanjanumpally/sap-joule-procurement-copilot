@@ -1,0 +1,60 @@
+{
+  "name": "cds-plugin-llm",
+  "version": "0.1.0",
+  "description": "LLM-agnostic AI service for SAP CAP. Speaks Anthropic, Ollama, and (planned) SAP Generative AI Hub behind one API.",
+  "main": "lib/index.js",
+  "files": [
+    "cds-plugin.js",
+    "lib/",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test test/",
+    "example:procurement": "node examples/procurement-handler.js"
+  },
+  "keywords": [
+    "sap",
+    "cap",
+    "cds",
+    "llm",
+    "ai",
+    "anthropic",
+    "claude",
+    "ollama",
+    "generative-ai-hub",
+    "joule"
+  ],
+  "author": "",
+  "license": "Apache-2.0",
+  "cds": {
+    "requires": {
+      "kinds": {
+        "llm-anthropic": {
+          "impl": "cds-plugin-llm/lib/providers/anthropic.js",
+          "model": "cds-plugin-llm/lib/llm.cds"
+        },
+        "llm-ollama": {
+          "impl": "cds-plugin-llm/lib/providers/ollama.js",
+          "model": "cds-plugin-llm/lib/llm.cds"
+        },
+        "llm-genai-hub": {
+          "impl": "cds-plugin-llm/lib/providers/genai-hub.js",
+          "model": "cds-plugin-llm/lib/llm.cds"
+        }
+      }
+    }
+  },
+  "peerDependencies": {
+    "@sap/cds": ">=7"
+  },
+  "peerDependenciesMeta": {
+    "@sap/cds": { "optional": false }
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.36.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
