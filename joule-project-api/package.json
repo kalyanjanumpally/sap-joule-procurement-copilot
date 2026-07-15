@@ -10,7 +10,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.111.0",
     "@sap/cds": "^9",
-    "cds-plugin-llm": "file:../cds-plugin-llm",
+    "@kalyanjanumpally/cds-plugin-llm": "file:../cds-plugin-llm",
     "express": "^4"
   },
   "engines": {
