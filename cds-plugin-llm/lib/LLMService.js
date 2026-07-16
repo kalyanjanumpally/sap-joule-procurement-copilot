@@ -71,8 +71,43 @@ class LLMService extends cds.Service {
     );
   }
 
+  /**
+   * Async generator streaming response chunks as they arrive.
+   *
+   *   for await (const chunk of llm.stream({ messages, ... })) {
+   *     if (chunk.type === 'text_delta') process.stdout.write(chunk.text);
+   *     if (chunk.type === 'done')       console.log('\nusage:', chunk.usage);
+   *   }
+   *
+   * Chunk types:
+   *   { type: 'text_delta', text: string }        - incremental text
+   *   { type: 'done', text, usage, stopReason, model }  - accumulated + metadata
+   *
+   * Retries are NOT applied to streams (partial-response semantics are unclear).
+   */
+  async *stream(req) {
+    if (!req || !Array.isArray(req.messages) || req.messages.length === 0) {
+      throw new Error('stream() requires { messages: [{ role, content }, ...] }');
+    }
+    const merged = {
+      model: req.model ?? this.modelId,
+      maxTokens: req.maxTokens ?? this.defaultMaxTokens,
+      system: req.system,
+      messages: req.messages,
+      tools: req.tools,
+      format: req.format,
+      thinking: req.thinking,
+      cache: req.cache,
+    };
+    yield* this._stream(merged);
+  }
+
   async _chat() {
     throw new Error(`${this.constructor.name} must implement _chat()`);
+  }
+
+  async *_stream() {
+    throw new Error(`${this.constructor.name} does not support streaming`);
   }
 
   async _embed() {

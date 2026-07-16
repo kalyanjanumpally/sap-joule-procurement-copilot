@@ -174,6 +174,44 @@ if (turn1.toolCalls?.length) {
 
 Works across providers with matching `{ id, name, input }` shape. Individual model quality varies for multi-tool scenarios — llama-3.3-70b on Groq is solid for single-tool cases; Claude and qwen2.5 are more reliable for chained tool use.
 
+## Streaming (new in v0.6.0)
+
+Get tokens as they arrive from the model instead of waiting for the full response:
+
+```js
+for await (const chunk of llm.stream({
+  system: 'You are a poet.',
+  messages: [{ role: 'user', content: 'Write a haiku about SAP procurement.' }],
+})) {
+  if (chunk.type === 'text_delta') {
+    process.stdout.write(chunk.text);
+  }
+  if (chunk.type === 'done') {
+    console.log(`\n[${chunk.usage.output_tokens} tokens, stopReason: ${chunk.stopReason}]`);
+  }
+}
+```
+
+Chunk types:
+
+| type | payload | when |
+|---|---|---|
+| `text_delta` | `{ text }` — incremental piece of text | fires per token/token-group as the model generates |
+| `done` | `{ text, usage, stopReason, model }` — accumulated text + final metadata | once at the end |
+
+Wire-shape parsing per provider:
+- **Anthropic**: uses the SDK's `messages.stream()` — SSE under the hood, events adapted to unified chunks
+- **OpenAI-compatible / Groq / GenAI Hub**: parses SSE (`data: {json}\n\n`) from the `/chat/completions` streaming endpoint, adds `stream_options: {include_usage: true}` so `usage` populates on the `done` chunk
+- **Ollama**: parses NDJSON from `/api/chat`, emits `done` when the stream's final message carries `done:true`
+
+Retries are **not** applied to streams (partial-response semantics are unclear). If a stream fails mid-way, the caller sees the error thrown from the generator.
+
+Try the demo:
+
+```sh
+node scripts/stream-demo.js "Explain streaming LLM responses in 3 sentences."
+```
+
 ## Vision / multimodal input (new in v0.5.0)
 
 Pass images inline as content blocks. Works across all providers with vision-capable models (Claude 3.5+, GPT-4o, Groq's `llama-3.2-*-vision`, Ollama's `llava` / `moondream` / `llama3.2-vision`).

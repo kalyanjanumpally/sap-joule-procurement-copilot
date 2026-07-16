@@ -60,4 +60,48 @@ class AnthropicLLMService extends LLMService {
   }
 }
 
+/**
+ * Streaming: use the Anthropic SDK's stream() method, which returns an
+ * async iterable of native events. We adapt to unified chunks.
+ */
+AnthropicLLMService.prototype._stream = async function* _stream(
+  { model, maxTokens, system, messages, tools, format, thinking, cache },
+) {
+  const params = {
+    model,
+    max_tokens: maxTokens,
+    messages: messages.map(m => ({ role: m.role, content: m.content })),
+  };
+  if (system) {
+    params.system = cache
+      ? [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }]
+      : system;
+  }
+  if (tools) params.tools = tools;
+  if (format) params.output_config = { format: { type: 'json_schema', schema: format } };
+  if (thinking !== false) params.thinking = thinking ?? { type: 'adaptive' };
+
+  const stream = this.client.messages.stream(params);
+
+  for await (const event of stream) {
+    if (event.type === 'content_block_delta' && event.delta?.type === 'text_delta') {
+      yield { type: 'text_delta', text: event.delta.text };
+    }
+  }
+
+  const message = await stream.finalMessage();
+  const text = message.content
+    .filter(b => b.type === 'text')
+    .map(b => b.text)
+    .join('');
+
+  yield {
+    type: 'done',
+    text,
+    usage: message.usage,
+    stopReason: message.stop_reason,
+    model: message.model,
+  };
+};
+
 module.exports = AnthropicLLMService;

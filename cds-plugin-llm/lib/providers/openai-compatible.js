@@ -191,4 +191,84 @@ function translateBlock(block) {
   return null;
 }
 
+/**
+ * Streaming: adds `stream:true` to the request body, parses the SSE response
+ * (`data: {json}\n\n` lines terminated by `data: [DONE]`), and yields unified
+ * chunks.
+ */
+OpenAICompatibleLLMService.prototype._stream = async function* _stream(
+  { model, maxTokens, system, messages, format, tools },
+) {
+  const effectiveSystem = format
+    ? `${system ?? ''}\n\nRespond with ONLY a JSON object matching this schema:\n${JSON.stringify(format, null, 2)}`.trim()
+    : system;
+
+  const body = {
+    model,
+    max_tokens: maxTokens,
+    stream: true,
+    stream_options: { include_usage: true },  // OpenAI + Groq honor this
+    messages: [
+      ...(effectiveSystem ? [{ role: 'system', content: effectiveSystem }] : []),
+      ...messages.map(translateMessage),
+    ],
+  };
+  if (format) body.response_format = { type: 'json_object' };
+  if (tools?.length) {
+    body.tools = tools.map(t => ({
+      type: 'function',
+      function: { name: t.name, description: t.description, parameters: t.input_schema ?? t.parameters },
+    }));
+  }
+
+  const res = await fetch(this._endpoint(), {
+    method: 'POST',
+    headers: await this._headers(),
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) await throwFromResponse(res, `OpenAI-compatible provider (${this.options.kind ?? 'openai-compatible'})`);
+
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let accumulatedText = '';
+  let usage = {};
+  let stopReason;
+  let respModel = model;
+
+  for await (const chunk of res.body) {
+    buffer += decoder.decode(chunk, { stream: true });
+    // SSE events are separated by blank lines. Keep the tail as it may be partial.
+    const events = buffer.split('\n\n');
+    buffer = events.pop() ?? '';
+    for (const eventBlock of events) {
+      // Each event may have multiple `data:` lines; the SSE spec concatenates them.
+      const dataLines = eventBlock
+        .split('\n')
+        .filter(l => l.startsWith('data:'))
+        .map(l => l.slice(5).trimStart());
+      if (dataLines.length === 0) continue;
+      const dataStr = dataLines.join('\n');
+      if (dataStr === '[DONE]') continue;
+      let evt;
+      try { evt = JSON.parse(dataStr); } catch { continue; }
+      const choice = evt.choices?.[0];
+      const delta = choice?.delta?.content;
+      if (delta) {
+        accumulatedText += delta;
+        yield { type: 'text_delta', text: delta };
+      }
+      if (choice?.finish_reason) stopReason = choice.finish_reason === 'tool_calls' ? 'tool_use' : choice.finish_reason;
+      if (evt.usage) {
+        usage = {
+          input_tokens: evt.usage.prompt_tokens,
+          output_tokens: evt.usage.completion_tokens,
+        };
+      }
+      if (evt.model) respModel = evt.model;
+    }
+  }
+
+  yield { type: 'done', text: accumulatedText, usage, stopReason, model: respModel };
+};
+
 module.exports = OpenAICompatibleLLMService;

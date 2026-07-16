@@ -117,4 +117,66 @@ function translateMessage(m) {
   return out;
 }
 
+/**
+ * Streaming: sets `stream:true` on the request, parses newline-delimited JSON
+ * responses from Ollama, and yields unified chunks. Ollama's stream ends with
+ * an object carrying `done:true` and totals.
+ */
+OllamaLLMService.prototype._stream = async function* _stream(
+  { model, maxTokens, system, messages, format, tools },
+) {
+  const body = {
+    model,
+    stream: true,
+    options: { num_predict: maxTokens },
+    messages: [
+      ...(system ? [{ role: 'system', content: system }] : []),
+      ...messages.map(translateMessage),
+    ],
+  };
+  if (format) body.format = format;
+  if (tools?.length) {
+    body.tools = tools.map(t => ({
+      type: 'function',
+      function: { name: t.name, description: t.description, parameters: t.input_schema ?? t.parameters },
+    }));
+  }
+
+  const res = await fetch(`${this.baseUrl}/api/chat`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) await throwFromResponse(res, 'Ollama');
+
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let accumulatedText = '';
+
+  for await (const chunk of res.body) {
+    buffer += decoder.decode(chunk, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() ?? '';
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      let evt;
+      try { evt = JSON.parse(line); } catch { continue; }
+      const delta = evt.message?.content;
+      if (delta) {
+        accumulatedText += delta;
+        yield { type: 'text_delta', text: delta };
+      }
+      if (evt.done) {
+        yield {
+          type: 'done',
+          text: accumulatedText,
+          usage: { input_tokens: evt.prompt_eval_count, output_tokens: evt.eval_count },
+          stopReason: evt.done_reason,
+          model: evt.model,
+        };
+      }
+    }
+  }
+};
+
 module.exports = OllamaLLMService;
