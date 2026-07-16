@@ -135,7 +135,8 @@ function safeParseJson(s) {
  *  - Assistant with tool calls: { role:'assistant', content, toolCalls:[{id,name,input}] }
  *  - Tool result: { role:'tool', tool_use_id, content } (Anthropic-ish) ->
  *                 { role:'tool', tool_call_id, content } (OpenAI)
- *  - Content array (Anthropic-style multi-block) is flattened to text.
+ *  - Multi-block content (text + image blocks) preserved as OpenAI's multi-part
+ *    array: [{type:'text',text},{type:'image_url',image_url:{url}}, ...]
  */
 function translateMessage(m) {
   // Tool result feedback
@@ -161,13 +162,33 @@ function translateMessage(m) {
       })),
     };
   }
-  // Plain
-  return {
-    role: m.role,
-    content: typeof m.content === 'string'
-      ? m.content
-      : m.content.map(b => b.text ?? '').join(''),
-  };
+  // Multi-block content (vision: mix of text + image blocks)
+  if (Array.isArray(m.content)) {
+    const hasImage = m.content.some(b => b?.type === 'image');
+    if (hasImage) {
+      return {
+        role: m.role,
+        content: m.content.map(translateBlock).filter(Boolean),
+      };
+    }
+    // No images: flatten to text (matches prior behavior)
+    return { role: m.role, content: m.content.map(b => b.text ?? '').join('') };
+  }
+  // Plain string content
+  return { role: m.role, content: m.content };
+}
+
+function translateBlock(block) {
+  if (block.type === 'text') return { type: 'text', text: block.text };
+  if (block.type === 'image') {
+    const src = block.source ?? {};
+    if (src.type === 'url') return { type: 'image_url', image_url: { url: src.url } };
+    if (src.type === 'base64') {
+      return { type: 'image_url', image_url: { url: `data:${src.media_type};base64,${src.data}` } };
+    }
+    throw new Error(`Unsupported image source type: ${src.type}`);
+  }
+  return null;
 }
 
 module.exports = OpenAICompatibleLLMService;

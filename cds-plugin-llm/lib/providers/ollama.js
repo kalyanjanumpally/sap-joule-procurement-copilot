@@ -19,12 +19,7 @@ class OllamaLLMService extends LLMService {
       options: { num_predict: maxTokens },
       messages: [
         ...(system ? [{ role: 'system', content: system }] : []),
-        ...messages.map(m => ({
-          role: m.role,
-          content: typeof m.content === 'string'
-            ? m.content
-            : m.content.map(b => b.text ?? '').join(''),
-        })),
+        ...messages.map(translateMessage),
       ],
     };
 
@@ -90,6 +85,36 @@ class OllamaLLMService extends LLMService {
     }
     return { embeddings, model };
   }
+}
+
+/**
+ * Ollama message shape:
+ *   { role, content: string, images?: [base64, ...] }
+ * Multi-block content (text + image blocks) is decomposed: text parts joined,
+ * image parts extracted to the `images` array (base64 required — Ollama does
+ * not accept URLs directly).
+ */
+function translateMessage(m) {
+  if (typeof m.content === 'string') return { role: m.role, content: m.content };
+  if (!Array.isArray(m.content)) return { role: m.role, content: '' };
+
+  const textParts = [];
+  const images = [];
+  for (const block of m.content) {
+    if (block?.type === 'text') textParts.push(block.text ?? '');
+    else if (block?.type === 'image') {
+      const src = block.source ?? {};
+      if (src.type === 'base64') images.push(src.data);
+      else if (src.type === 'url') {
+        throw new Error(
+          'Ollama images must be base64. Convert URLs client-side (e.g. via fetch + toString(\'base64\')), or use imageFromFile() for local files.'
+        );
+      }
+    }
+  }
+  const out = { role: m.role, content: textParts.join('\n') };
+  if (images.length) out.images = images;
+  return out;
 }
 
 module.exports = OllamaLLMService;

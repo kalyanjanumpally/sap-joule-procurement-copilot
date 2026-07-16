@@ -174,6 +174,58 @@ if (turn1.toolCalls?.length) {
 
 Works across providers with matching `{ id, name, input }` shape. Individual model quality varies for multi-tool scenarios — llama-3.3-70b on Groq is solid for single-tool cases; Claude and qwen2.5 are more reliable for chained tool use.
 
+## Vision / multimodal input (new in v0.5.0)
+
+Pass images inline as content blocks. Works across all providers with vision-capable models (Claude 3.5+, GPT-4o, Groq's `llama-3.2-*-vision`, Ollama's `llava` / `moondream` / `llama3.2-vision`).
+
+```js
+const { imageFromFile, imageFromUrl, imageFromBase64 } = require('@saptarishi/cds-plugin-llm');
+
+// Load from disk
+const image = await imageFromFile('/tmp/scanned-invoice.png');
+
+// Or from a URL (Anthropic + OpenAI-compat; Ollama needs base64)
+const image = imageFromUrl('https://example.com/invoice.png');
+
+// Or from base64 data you already have
+const image = imageFromBase64(base64Data, 'image/png');
+
+const { data } = await llm.chat({
+  model: 'gpt-4o',  // or claude-opus-4-7, llama-3.2-11b-vision-preview, llava, ...
+  system: 'Extract structured data from scanned invoices.',
+  messages: [{
+    role: 'user',
+    content: [
+      image,
+      { type: 'text', text: 'Return the vendor, invoice number, and line items.' },
+    ],
+  }],
+  format: {
+    type: 'object',
+    properties: {
+      vendor: { type: 'string' },
+      invoiceNumber: { type: 'string' },
+      lineItems: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            description: { type: 'string' },
+            quantity: { type: 'number' },
+            unitPrice: { type: 'number' },
+          },
+        },
+      },
+    },
+  },
+});
+```
+
+Wire-shape translation is provider-aware:
+- **Anthropic**: native content blocks (source can be `url` or `base64`)
+- **OpenAI-compatible / Groq**: `image_url` blocks with data URLs for base64
+- **Ollama**: text goes in `content`, images extracted to `images: [base64, ...]` (Ollama does not accept URLs — use `imageFromFile()` or `imageFromBase64()`)
+
 ## SAP Generative AI Hub setup
 
 The `llm-genai-hub` kind targets a **deployment** in your BTP AI Core instance. Prerequisites:

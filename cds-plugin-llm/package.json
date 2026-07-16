@@ -1,7 +1,7 @@
 {
   "name": "@saptarishi/cds-plugin-llm",
-  "version": "0.4.0",
-  "description": "LLM-agnostic AI service for SAP CAP. Speaks Anthropic, Ollama, Groq, any OpenAI-compatible endpoint, and SAP Generative AI Hub behind one API. Supports structured outputs, tool use / function calling, and automatic retries with exponential backoff.",
+  "version": "0.5.0",
+  "description": "LLM-agnostic AI service for SAP CAP. Speaks Anthropic, Ollama, Groq, any OpenAI-compatible endpoint, and SAP Generative AI Hub behind one API. Supports vision / multimodal input, structured outputs, tool use / function calling, and automatic retries with exponential backoff.",
   "main": "lib/index.js",
   "files": [
     "cds-plugin.js",
@@ -25,6 +25,8 @@
     "groq",
     "openai-compatible",
     "generative-ai-hub",
+    "vision",
+    "multimodal",
     "joule"
   ],
   "author": "",

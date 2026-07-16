@@ -64,4 +64,67 @@ async function throwFromResponse(res, providerName) {
   throw err;
 }
 
-module.exports = { withRetry, RetryableError, throwFromResponse, DEFAULT_RETRY };
+// ---------------------------------------------------------------------------
+// Image content-block helpers (vision)
+// ---------------------------------------------------------------------------
+
+const IMAGE_MEDIA_TYPES = {
+  '.png':  'image/png',
+  '.jpg':  'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif':  'image/gif',
+  '.webp': 'image/webp',
+};
+
+/**
+ * Load an image from disk and return a plugin-shape image block.
+ * Auto-detects media type from extension.
+ *
+ *   const img = await imageFromFile('/tmp/invoice.png');
+ *   await llm.chat({ messages: [{ role: 'user', content: [img, { type: 'text', text: 'Extract line items' }] }] });
+ */
+async function imageFromFile(filePath) {
+  const path = require('node:path');
+  const fs = require('node:fs/promises');
+  const ext = path.extname(filePath).toLowerCase();
+  const media_type = IMAGE_MEDIA_TYPES[ext];
+  if (!media_type) {
+    throw new Error(
+      `imageFromFile: unsupported extension '${ext}'. Supported: ${Object.keys(IMAGE_MEDIA_TYPES).join(', ')}`
+    );
+  }
+  const buf = await fs.readFile(filePath);
+  return {
+    type: 'image',
+    source: { type: 'base64', media_type, data: buf.toString('base64') },
+  };
+}
+
+/**
+ * Reference a remote image by URL. Works for Anthropic and OpenAI-compat.
+ * Ollama does not accept URLs directly — use imageFromFile after downloading.
+ */
+function imageFromUrl(url) {
+  return { type: 'image', source: { type: 'url', url } };
+}
+
+/**
+ * Wrap raw base64 image data into a plugin-shape image block.
+ * media_type: 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp'
+ */
+function imageFromBase64(base64Data, mediaType = 'image/png') {
+  return {
+    type: 'image',
+    source: { type: 'base64', media_type: mediaType, data: base64Data },
+  };
+}
+
+module.exports = {
+  withRetry,
+  RetryableError,
+  throwFromResponse,
+  DEFAULT_RETRY,
+  imageFromFile,
+  imageFromUrl,
+  imageFromBase64,
+};
