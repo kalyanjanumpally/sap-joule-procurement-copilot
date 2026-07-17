@@ -271,4 +271,30 @@ OpenAICompatibleLLMService.prototype._stream = async function* _stream(
   yield { type: 'done', text: accumulatedText, usage, stopReason, model: respModel };
 };
 
+/**
+ * Embeddings via the OpenAI-compatible /embeddings endpoint. Works with:
+ *   OpenAI       (text-embedding-3-small, text-embedding-3-large, ada-002)
+ *   Groq         (embedding models when available; check console.groq.com)
+ *   Together AI  (togethercomputer/m2-bert-80M-8k-retrieval, etc.)
+ *   DeepSeek     (limited)
+ *   LM Studio    (whatever embedding model is loaded)
+ *
+ * Providers that don't support embeddings will throw with the upstream 400.
+ */
+OpenAICompatibleLLMService.prototype._embed = async function _embed({ model, input }) {
+  const body = { model, input };
+  const res = await fetch(`${this.baseUrl}/embeddings`, {
+    method: 'POST',
+    headers: await this._headers(),
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    await throwFromResponse(res, `OpenAI-compatible provider (${this.options.kind ?? 'openai-compatible'}) [embeddings]`);
+  }
+  const data = await res.json();
+  // OpenAI returns { data: [{ embedding: [...] }, ...], model, usage: {...} }
+  const embeddings = (data.data ?? []).map(d => d.embedding);
+  return { embeddings, model: data.model ?? model };
+};
+
 module.exports = OpenAICompatibleLLMService;

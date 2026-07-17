@@ -221,6 +221,24 @@ Try the demo:
 node scripts/stream-demo.js "Explain streaming LLM responses in 3 sentences."
 ```
 
+## Embeddings (expanded in v0.7.0)
+
+```js
+const { embeddings } = await llm.embed({
+  input: ['first document', 'second document', 'third'],
+  model: 'text-embedding-3-small',  // optional; falls back to configured modelId
+});
+// embeddings is number[][] — one vector per input string
+```
+
+Supported providers:
+- **Ollama** — `mxbai-embed-large`, `nomic-embed-text`, `all-minilm`, any embedding model you've pulled
+- **OpenAI-compatible** (including Groq, Together AI, DeepSeek, LM Studio) — `text-embedding-3-small`, `text-embedding-3-large`, `text-embedding-ada-002`, provider-specific models
+- **Anthropic**: not supported (no first-party embeddings)
+- **GenAI Hub**: needs a separate embedding-model deployment; not yet plumbed (planned for 0.9)
+
+Single string or array of strings both work. Returns `{ embeddings: number[][], model: string }` — the outer array always matches the input length.
+
 ## Vision / multimodal input (new in v0.5.0)
 
 Pass images inline as content blocks. Works across all providers with vision-capable models (Claude 3.5+, GPT-4o, Groq's `llama-3.2-*-vision`, Ollama's `llava` / `moondream` / `llama3.2-vision`).
@@ -410,7 +428,7 @@ llm.embed({ input: string | string[], model? })
 | structured output (`format`) | ✓ (`output_config`) | ✓ (native `format`) | ✓ (json_object mode) | ✓ (json_object) | ✓ (json_object) |
 | tool use (`tools`)    | ✓ (native)     | ✓ (qwen2.5, llama3.1+) | ✓ (function-calling models) | ✓ | ✓ |
 | vision (images)       | ✓ (Claude 3.5+) | ✓ (llava, moondream, llama3.2-vision) | ✓ (llama-4-scout, etc.) | ✓ (gpt-4o, etc.) | ✓ (deployment-dependent) |
-| embeddings            | — (no first-party embeddings) | ✓ (`mxbai-embed-large`, etc.) | — (planned) | — (planned) | — (planned) |
+| embeddings            | — (no first-party embeddings) | ✓ (`mxbai-embed-large`, etc.) | ✓ (when model available) | ✓ (`text-embedding-3-*`, `ada-002`, etc.) | — (needs separate deployment; planned) |
 | prompt caching (`cache`) | ✓ (system prompt ephemeral) | — | — | — | — |
 | adaptive thinking (`thinking`) | ✓ (Opus 4.7 native) | — | — | — | — |
 
@@ -463,10 +481,11 @@ CI runs the same checks on every push (Node 20 + 22 matrix).
 
 ## Roadmap
 
-- **0.7**: embeddings on OpenAI-compat / Groq (feature parity with Ollama's `embed()`)
+- ~~**0.7**: embeddings on OpenAI-compat / Groq~~ ✓ shipped in v0.7.0
 - **0.8**: PDF content blocks (Anthropic + OpenAI-compat native support)
+- **0.9**: GenAI Hub embeddings (separate deployment ID support) + response caching layer
 - **1.0**: live-verified GenAI Hub provider + API stability commitment
-- **Beyond**: response caching, per-user rate limiting hooks, custom middleware/interceptor pattern
+- **Beyond**: per-user rate limiting hooks, custom middleware/interceptor pattern
 
 ## License
 
