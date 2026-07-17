@@ -49,9 +49,73 @@ Medium = overdue 1-30d, or amount 25k-100k without matched PO.
 Low = current, matched to PO, within tolerance.
 Rationale must cite the specific field(s) driving the rating.`;
 
+// Module-scoped lazy singleton so the streaming Express route (registered in
+// cds.on('bootstrap') below) and the OData handlers below share one LLM instance.
+let _llmPromise;
+function getLLM() {
+  if (!_llmPromise) _llmPromise = connectLLM();
+  return _llmPromise;
+}
+
+/**
+ * SSE streaming handler — plain Express, not OData. Registered from within
+ * AIService.init() so it fires after cds.app is available.
+ *
+ *   POST /stream/summarizePurchaseOrder
+ *   body: { purchaseOrderId, poJson }
+ *   response: text/event-stream
+ *     data: {"type":"text_delta","text":"Acme "}\n\n
+ *     data: {"type":"text_delta","text":"Steel "}\n\n
+ *     data: {"type":"done","text":"...","usage":{...},"model":"..."}\n\n
+ */
+function makeStreamHandler(llm) {
+  return async (req, res) => {
+    const { purchaseOrderId, poJson } = req.body ?? {};
+    if (!poJson) {
+      res.status(400).json({ error: 'poJson is required in JSON body' });
+      return;
+    }
+
+    res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');  // hint to nginx / CF gorouter to flush
+    res.flushHeaders?.();
+
+    const write = (obj) => res.write(`data: ${JSON.stringify(obj)}\n\n`);
+
+    try {
+      for await (const chunk of llm.stream({
+        system: PO_SYSTEM,
+        messages: [{ role: 'user', content: poJson }],
+        maxTokens: 300,
+      })) {
+        // If the client disconnected mid-stream, res.write throws and we exit via catch.
+        write({ ...chunk, purchaseOrderId });
+      }
+      res.end();
+    } catch (e) {
+      // Client-close or upstream failure — try to notify (safe if socket is still open)
+      try { write({ type: 'error', message: e.message }); res.end(); } catch { /* socket gone */ }
+    }
+  };
+}
+
 module.exports = class AIService extends cds.ApplicationService {
   async init() {
-    const llm = await connectLLM();
+    const llm = await getLLM();
+
+    // Register the SSE streaming endpoint on the Express app. Path is
+    // /stream/... (not /ai/stream/...) because CAP mounts the OData handler
+    // as middleware on /ai and catches everything under it.
+    if (cds.app) {
+      const express = require('express');
+      cds.app.post(
+        '/stream/summarizePurchaseOrder',
+        express.json({ limit: '1mb' }),
+        makeStreamHandler(llm),
+      );
+    }
 
     this.on('summarizePurchaseOrder', async (req) => {
       const { purchaseOrderId, poJson } = req.data;
