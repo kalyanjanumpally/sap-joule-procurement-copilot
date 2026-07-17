@@ -191,11 +191,28 @@ function translateBlock(block) {
     throw new Error(`Unsupported image source type: ${src.type}`);
   }
   if (block.type === 'document') {
-    throw new Error(
-      'PDF/document blocks are only supported on the Anthropic provider today. ' +
-      'For OpenAI-compatible providers, extract text from the PDF client-side ' +
-      '(e.g. via pdf-parse or a vision model on rendered pages).'
-    );
+    const src = block.source ?? {};
+    if (src.type === 'base64') {
+      // OpenAI inline file shape (works with GPT-4o and newer models that
+      // accept document input). Other OpenAI-compat providers (Groq,
+      // DeepSeek, LM Studio, Together) will 400 upstream if they don't
+      // support it — that's the honest signal to the caller.
+      return {
+        type: 'file',
+        file: {
+          filename: 'document.pdf',
+          file_data: `data:${src.media_type || 'application/pdf'};base64,${src.data}`,
+        },
+      };
+    }
+    if (src.type === 'url') {
+      throw new Error(
+        'OpenAI-compat providers do not accept PDFs by URL. Fetch the file ' +
+        'client-side and pass via pdfFromBase64(), or use the Anthropic ' +
+        'provider (which does accept URL PDFs natively).'
+      );
+    }
+    throw new Error(`Unsupported document source type: ${src.type}`);
   }
   return null;
 }

@@ -1,5 +1,5 @@
 const cds = require('@sap/cds');
-const { withRetry } = require('./util');
+const { withRetry, ResponseCache, hashChatRequest } = require('./util');
 
 /**
  * Abstract LLM service. Providers extend this and implement _chat / _embed.
@@ -24,6 +24,15 @@ class LLMService extends cds.Service {
     this.modelId = this.options.modelId ?? this.options.model;
     this.defaultMaxTokens = this.options.maxTokens ?? 16000;
     this.defaultRetries = this.options.retries;
+    // Optional response cache. Enable via options.responseCache = true
+    // (defaults: 5min TTL, 100 entries) or options.responseCache = { ttlMs,
+    // maxEntries }. Skipped for tool-use and streaming (partial responses /
+    // side effects don't cache well). NOTE: distinct from Anthropic's per-
+    // request `cache: true` option, which controls provider-side prompt caching.
+    if (this.options.responseCache) {
+      const cfg = this.options.responseCache === true ? {} : this.options.responseCache;
+      this.responseCache = new ResponseCache(cfg);
+    }
     return super.init();
   }
 
@@ -41,8 +50,21 @@ class LLMService extends cds.Service {
       thinking: req.thinking,
       cache: req.cache,
     };
+    // Response-cache lookup (only for non-tool, non-streaming requests)
+    const cacheKey = this.responseCache && !req.tools ? hashChatRequest(merged) : null;
+    if (cacheKey) {
+      const cached = this.responseCache.get(cacheKey);
+      if (cached) return { ...cached, cached: true };
+    }
+
     const retryOpts = req.retries ?? this.defaultRetries ?? {};
     const result = await withRetry(() => this._chat(merged), retryOpts);
+
+    // Cache successful non-tool responses
+    if (cacheKey && !result.toolCalls) {
+      this.responseCache.set(cacheKey, result);
+    }
+
     // Structured-output post-process: if caller asked for format, try to parse
     // .text as JSON and expose as .data. Providers that natively enforce the
     // schema will succeed; ones that don't may leave stray prose around JSON.

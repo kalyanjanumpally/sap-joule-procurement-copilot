@@ -1,3 +1,5 @@
+const crypto = require('node:crypto');
+
 const DEFAULT_RETRY = { max: 3, baseMs: 500, maxMs: 20000 };
 const RETRYABLE_STATUS = new Set([408, 409, 425, 429, 500, 502, 503, 504, 529]);
 
@@ -62,6 +64,72 @@ async function throwFromResponse(res, providerName) {
   const err = new Error(message);
   err.status = res.status;
   throw err;
+}
+
+// ---------------------------------------------------------------------------
+// Response caching (in-memory LRU with TTL)
+// ---------------------------------------------------------------------------
+
+/**
+ * Small LRU with per-entry TTL. Insertion order via Map; on get, delete+reset
+ * for LRU semantics. Not thread-safe (not needed in Node's event loop).
+ */
+class ResponseCache {
+  constructor({ ttlMs = 5 * 60 * 1000, maxEntries = 100 } = {}) {
+    this.ttlMs = ttlMs;
+    this.maxEntries = maxEntries;
+    this.map = new Map();
+    this.hits = 0;
+    this.misses = 0;
+  }
+  get(key) {
+    const entry = this.map.get(key);
+    if (!entry) { this.misses++; return undefined; }
+    if (entry.expiresAt < Date.now()) {
+      this.map.delete(key);
+      this.misses++;
+      return undefined;
+    }
+    // LRU: touch by re-inserting
+    this.map.delete(key);
+    this.map.set(key, entry);
+    this.hits++;
+    return entry.value;
+  }
+  set(key, value) {
+    if (this.map.size >= this.maxEntries) {
+      // Evict oldest (first-inserted)
+      const oldest = this.map.keys().next().value;
+      if (oldest !== undefined) this.map.delete(oldest);
+    }
+    this.map.set(key, { value, expiresAt: Date.now() + this.ttlMs });
+  }
+  clear() { this.map.clear(); this.hits = 0; this.misses = 0; }
+  size() { return this.map.size; }
+}
+
+/**
+ * Deterministic hash of a chat-request shape. Keys are sorted so equivalent
+ * requests hash the same. Skips volatile fields (retries, cache).
+ */
+function hashChatRequest(req) {
+  const stable = stableStringify({
+    model: req.model,
+    maxTokens: req.maxTokens,
+    system: req.system,
+    messages: req.messages,
+    tools: req.tools,
+    format: req.format,
+    thinking: req.thinking,
+  });
+  return crypto.createHash('sha1').update(stable).digest('hex');
+}
+
+function stableStringify(value) {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
+  const keys = Object.keys(value).sort();
+  return `{${keys.map(k => `${JSON.stringify(k)}:${stableStringify(value[k])}`).join(',')}}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -168,6 +236,8 @@ module.exports = {
   RetryableError,
   throwFromResponse,
   DEFAULT_RETRY,
+  ResponseCache,
+  hashChatRequest,
   imageFromFile,
   imageFromUrl,
   imageFromBase64,

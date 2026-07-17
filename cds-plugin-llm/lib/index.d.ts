@@ -166,6 +166,8 @@ export interface ChatResponse<D = unknown> {
   /** 'end_turn' | 'tool_use' | 'max_tokens' | 'stop' | 'refusal' | provider-specific */
   stopReason?: string;
   model?: string;
+  /** True when the response was served from the responseCache */
+  cached?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -214,6 +216,13 @@ export interface ProviderOptions {
   model?: string;
   maxTokens?: number;
   retries?: RetryOptions;
+  /**
+   * Enable an in-memory response cache for chat() calls.
+   * true = default config (5min TTL, 100 entries). Object = custom.
+   * Distinct from the per-request `cache: true` option (which controls
+   * Anthropic's provider-side prompt caching).
+   */
+  responseCache?: boolean | { ttlMs?: number; maxEntries?: number };
   credentials?: Record<string, unknown>;
   [key: string]: unknown;
 }

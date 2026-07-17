@@ -65,7 +65,45 @@ const origFetch = global.fetch;
 beforeEach(() => { global.fetch = async () => ({ ok: true, json: async () => ({}) }); });
 afterEach(() => { global.fetch = origFetch; });
 
-test('OpenAI-compat throws when a document block is passed', async () => {
+test('OpenAI-compat: base64 PDF is translated to inline file content-block', async () => {
+  let captured;
+  global.fetch = async (url, init) => {
+    captured = JSON.parse(init.body);
+    return {
+      ok: true,
+      status: 200,
+      headers: { get: () => null },
+      json: async () => ({
+        choices: [{ message: { content: 'ok', role: 'assistant' }, finish_reason: 'stop' }],
+        model: 'gpt-4o',
+        usage: {},
+      }),
+      text: async () => '',
+    };
+  };
+  const svc = new OpenAICompatibleLLMService('llm', null, {
+    credentials: { baseUrl: 'https://x/v1', apiKey: 'k' },
+    modelId: 'gpt-4o',
+  });
+  await svc.init();
+  await svc.chat({
+    messages: [{
+      role: 'user',
+      content: [pdfFromBase64('JVBERi0='), { type: 'text', text: 'summarize' }],
+    }],
+  });
+  const userMsg = captured.messages.find(m => m.role === 'user');
+  assert.deepEqual(userMsg.content[0], {
+    type: 'file',
+    file: {
+      filename: 'document.pdf',
+      file_data: 'data:application/pdf;base64,JVBERi0=',
+    },
+  });
+  assert.deepEqual(userMsg.content[1], { type: 'text', text: 'summarize' });
+});
+
+test('OpenAI-compat: URL PDF throws with actionable message', async () => {
   const svc = new OpenAICompatibleLLMService('llm', null, {
     credentials: { baseUrl: 'https://x/v1', apiKey: 'k' },
     modelId: 'gpt-4o',
@@ -75,10 +113,10 @@ test('OpenAI-compat throws when a document block is passed', async () => {
     () => svc.chat({
       messages: [{
         role: 'user',
-        content: [pdfFromBase64('AAAA'), { type: 'text', text: 'summarize' }],
+        content: [pdfFromUrl('https://example.com/x.pdf'), { type: 'text', text: 'q' }],
       }],
     }),
-    /Anthropic provider today/,
+    /do not accept PDFs by URL/,
   );
 });
 

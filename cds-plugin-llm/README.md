@@ -291,9 +291,9 @@ Wire-shape translation is provider-aware:
 - **OpenAI-compatible / Groq**: `image_url` blocks with data URLs for base64
 - **Ollama**: text goes in `content`, images extracted to `images: [base64, ...]` (Ollama does not accept URLs — use `imageFromFile()` or `imageFromBase64()`)
 
-## PDF documents (new in v0.8.0)
+## PDF documents (v0.8.0 · expanded in v0.9.0)
 
-Pass PDF documents inline. **Anthropic-only today** — Claude 3.5+ has native PDF understanding (parses text + visuals in one pass). Other providers throw a clear error rather than silently degrading.
+Pass PDF documents inline. Full native support on Anthropic (Claude 3.5+ parses text + visuals in one pass). Since **v0.9.0** OpenAI-compat providers accept base64 PDFs too via the `file` content-block shape — works on GPT-4o and newer OpenAI models. Groq and other OpenAI-compat providers that don't accept files will 400 upstream.
 
 ```js
 const { pdfFromFile, pdfFromUrl, pdfFromBase64 } = require('@saptarishi/cds-plugin-llm');
@@ -316,9 +316,11 @@ const { data } = await llm.chat({
 });
 ```
 
-For non-Anthropic providers, extract text/render pages client-side first:
-- **OpenAI-compat**: use their Files API (requires additional integration; on the 0.9 roadmap)
-- **Ollama**: render PDF pages to images via `pdftoppm` (poppler), pass to a vision model like `llava` or `llama3.2-vision`
+Provider notes:
+- **Anthropic** — native, both base64 and URL sources
+- **OpenAI-compat (GPT-4o+)** — base64 only. Plugin translates the document block to `{type:'file', file:{filename, file_data:'data:application/pdf;base64,...'}}`. URL PDFs throw with guidance to fetch client-side first.
+- **Groq / other OpenAI-compat that don't accept files** — will 400 upstream; the error propagates cleanly
+- **Ollama** — no PDF support; render pages to images via `pdftoppm` (poppler) and pass to a vision model like `llava` or `llama3.2-vision`
 
 ## SAP Generative AI Hub setup
 
@@ -368,7 +370,8 @@ AICORE_API_URL=https://api.ai.prod.eu-central-1.aws.ml.hana.ondemand.com
 AICORE_AUTH_URL=https://<subaccount>.authentication.<region>.hana.ondemand.com
 AICORE_CLIENT_ID=sb-...
 AICORE_CLIENT_SECRET=...
-AICORE_DEPLOYMENT_ID=abc123
+AICORE_DEPLOYMENT_ID=abc123                # chat model deployment
+AICORE_EMBEDDING_DEPLOYMENT_ID=def456      # optional; enables llm.embed()
 AICORE_MODEL=gpt-4o
 ```
 
@@ -421,6 +424,40 @@ await llm.chat({ messages: [...], retries: { max: 5, baseMs: 1000, maxMs: 30000 
 }}}}
 ```
 
+## Response caching (new in v0.9.0)
+
+Opt-in per-instance LRU cache with TTL. Skips tool-use calls (side-effects) and streaming (partial responses). Hits return the same `ChatResponse` shape with `cached: true` set.
+
+```jsonc
+{
+  "cds": { "requires": { "llm": {
+    "kind": "llm-groq",
+    "modelId": "llama-3.3-70b-versatile",
+    "responseCache": true                              // defaults: 5min TTL, 100 entries
+    // or: "responseCache": { "ttlMs": 600000, "maxEntries": 500 }
+  }}}
+}
+```
+
+Cache key is a SHA-1 of the request's stable JSON representation (`model + maxTokens + system + messages + tools + format + thinking`). Requests with any of those fields differing miss the cache.
+
+```js
+const r1 = await llm.chat({ messages: [{ role: 'user', content: 'hi' }] });
+r1.cached  // undefined  (miss + fresh call)
+
+const r2 = await llm.chat({ messages: [{ role: 'user', content: 'hi' }] });
+r2.cached  // true        (hit — no upstream call)
+
+llm.responseCache.hits    // 1
+llm.responseCache.misses  // 1
+llm.responseCache.size()  // 1
+```
+
+Common wins:
+- **Same PO summarized twice** (approver reopens the review) — instant, zero tokens
+- **Batch classification** with duplicate inputs — deduplicates automatically
+- **Load-testing** — dev-env queries hit cache after the first pass
+
 ## Full API
 
 ```ts
@@ -457,9 +494,10 @@ llm.embed({ input: string | string[], model? })
 | structured output (`format`) | ✓ (`output_config`) | ✓ (native `format`) | ✓ (json_object mode) | ✓ (json_object) | ✓ (json_object) |
 | tool use (`tools`)    | ✓ (native)     | ✓ (qwen2.5, llama3.1+) | ✓ (function-calling models) | ✓ | ✓ |
 | vision (images)       | ✓ (Claude 3.5+) | ✓ (llava, moondream, llama3.2-vision) | ✓ (llama-4-scout, etc.) | ✓ (gpt-4o, etc.) | ✓ (deployment-dependent) |
-| PDF (documents)       | ✓ (Claude 3.5+ native)  | — (render pages to images first) | — | — (requires Files API integration) | — |
-| embeddings            | — (no first-party embeddings) | ✓ (`mxbai-embed-large`, etc.) | ✓ (when model available) | ✓ (`text-embedding-3-*`, `ada-002`, etc.) | — (needs separate deployment; planned) |
-| prompt caching (`cache`) | ✓ (system prompt ephemeral) | — | — | — | — |
+| PDF (documents)       | ✓ (Claude 3.5+ native)  | — (render pages to images first) | — (Groq doesn't accept files) | ✓ (base64, on models that support `file` blocks — GPT-4o+) | ✓ (deployment-dependent) |
+| embeddings            | — (no first-party embeddings) | ✓ (`mxbai-embed-large`, etc.) | ✓ (when model available) | ✓ (`text-embedding-3-*`, `ada-002`, etc.) | ✓ (needs `embeddingDeploymentId`) |
+| response cache (opt-in) | ✓ | ✓ | ✓ | ✓ | ✓ |
+| prompt caching (`cache`) | ✓ (Anthropic system prompt ephemeral) | — | — | — | — |
 | adaptive thinking (`thinking`) | ✓ (Opus 4.7 native) | — | — | — | — |
 
 ## FAQ
@@ -513,9 +551,9 @@ CI runs the same checks on every push (Node 20 + 22 matrix).
 
 - ~~**0.7**: embeddings on OpenAI-compat / Groq~~ ✓ shipped in v0.7.0
 - ~~**0.8**: PDF content blocks (Anthropic native; other providers explicit-reject)~~ ✓ shipped in v0.8.0
-- **0.9**: OpenAI Files API integration for PDF (via GPT-4o) + GenAI Hub embeddings + response caching layer
+- ~~**0.9**: OpenAI-compat inline PDF (via `file` content-block) + GenAI Hub embeddings + response caching layer~~ ✓ shipped in v0.9.0
 - **1.0**: live-verified GenAI Hub provider + API stability commitment
-- **Beyond**: per-user rate limiting hooks, custom middleware/interceptor pattern
+- **Beyond**: per-user rate limiting hooks, custom middleware/interceptor pattern, HANA Cloud vector store integration
 
 ## License
 

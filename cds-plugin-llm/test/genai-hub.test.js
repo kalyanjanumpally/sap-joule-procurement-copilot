@@ -249,6 +249,50 @@ test('trailing slashes in URLs are normalized', async () => {
   assert.equal(fetchCalls[0].url, 'https://auth.example.com/oauth/token');
 });
 
+test('embed(): requires embeddingDeploymentId', async () => {
+  const svc = new GenAIHubLLMService('llm', null, { credentials: credentials() });
+  await svc.init();
+  await assert.rejects(
+    () => svc.embed({ input: 'hi', retries: { max: 0 } }),
+    /embeddingDeploymentId/,
+  );
+});
+
+test('embed(): hits the embedding deployment endpoint with OAuth + resource-group', async () => {
+  const svc = new GenAIHubLLMService('llm', null, {
+    credentials: { ...credentials(), embeddingDeploymentId: 'embDEP42' },
+    modelId: 'text-embedding-3-small',
+  });
+  await svc.init();
+  fetchResponses.set('/oauth/token', [mockFetchOk({ access_token: 'tok', expires_in: 3600 })]);
+  fetchResponses.set('/deployments/embDEP42/embeddings', [mockFetchOk({
+    data: [{ embedding: [0.1, 0.2, 0.3] }],
+    model: 'text-embedding-3-small',
+    usage: { prompt_tokens: 3, total_tokens: 3 },
+  })]);
+
+  const res = await svc.embed({ input: 'hi' });
+  assert.deepEqual(res.embeddings, [[0.1, 0.2, 0.3]]);
+  assert.equal(res.model, 'text-embedding-3-small');
+
+  const embedCall = fetchCalls.find(c => c.url.includes('/embDEP42/embeddings'));
+  assert.ok(embedCall, 'embedding endpoint was not hit');
+  assert.ok(embedCall.url.endsWith('/v2/inference/deployments/embDEP42/embeddings'));
+  assert.equal(embedCall.init.headers['authorization'], 'Bearer tok');
+  assert.equal(embedCall.init.headers['ai-resource-group'], 'default');
+});
+
+test('embed(): uses different deployment than chat', async () => {
+  const svc = new GenAIHubLLMService('llm', null, {
+    credentials: { ...credentials(), embeddingDeploymentId: 'embDEP99' },
+    modelId: 'x',
+  });
+  await svc.init();
+  // Both chat and embed should hit different endpoints
+  assert.ok(svc._endpoint().endsWith('/depABC123/chat/completions'));
+  assert.equal(svc.embeddingDeploymentId, 'embDEP99');
+});
+
 test('OAuth failure surfaces as retryable error when 429', async () => {
   const svc = new GenAIHubLLMService('llm', null, { credentials: credentials() });
   await svc.init();

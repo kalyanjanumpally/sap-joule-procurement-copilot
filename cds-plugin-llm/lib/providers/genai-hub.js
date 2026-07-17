@@ -70,6 +70,7 @@ class GenAIHubLLMService extends OpenAICompatibleLLMService {
     this.clientId = creds.clientId ?? creds.clientid ?? process.env.AICORE_CLIENT_ID;
     this.clientSecret = creds.clientSecret ?? creds.clientsecret ?? process.env.AICORE_CLIENT_SECRET;
     this.deploymentId = creds.deploymentId ?? process.env.AICORE_DEPLOYMENT_ID;
+    this.embeddingDeploymentId = creds.embeddingDeploymentId ?? process.env.AICORE_EMBEDDING_DEPLOYMENT_ID;
     this.resourceGroup = creds.resourceGroup ?? process.env.AICORE_RESOURCE_GROUP ?? 'default';
 
     const missing = [];
@@ -132,6 +133,32 @@ class GenAIHubLLMService extends OpenAICompatibleLLMService {
       'authorization': `Bearer ${await this._getAccessToken()}`,
       'ai-resource-group': this.resourceGroup,
     };
+  }
+
+  /**
+   * Embeddings on GenAI Hub — hit a separate deployment (embedding models
+   * are deployed independently from chat models on AI Core).
+   */
+  async _embed({ model, input }) {
+    if (!this.embeddingDeploymentId) {
+      throw new Error(
+        'GenAI Hub embeddings require credentials.embeddingDeploymentId (or ' +
+        'AICORE_EMBEDDING_DEPLOYMENT_ID env var). Deploy an embedding model in ' +
+        'AI Launchpad first and note its deployment ID.'
+      );
+    }
+    const url = `${this.aiCoreUrl.replace(/\/$/, '')}/v2/inference/deployments/${this.embeddingDeploymentId}/embeddings`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: await this._headers(),
+      body: JSON.stringify({ model, input }),
+    });
+    if (!res.ok) {
+      await throwFromResponse(res, 'GenAI Hub [embeddings]');
+    }
+    const data = await res.json();
+    const embeddings = (data.data ?? []).map(d => d.embedding);
+    return { embeddings, model: data.model ?? model };
   }
 
   /**
