@@ -24,6 +24,8 @@ npm install @saptarishi/cds-plugin-llm
 
 Optional peer dep for the Anthropic path: `@anthropic-ai/sdk` (installed automatically as a dependency).
 
+**TypeScript:** full type definitions ship in the package (`lib/index.d.ts`). No `@types/*` package needed.
+
 ## Configure
 
 Add to your CAP app's `package.json` under `cds.requires`:

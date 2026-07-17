@@ -1,0 +1,268 @@
+// Type definitions for @saptarishi/cds-plugin-llm
+// Public API surface only — internal utilities (withRetry, RetryableError,
+// throwFromResponse) are not re-exported and intentionally not typed here.
+
+// ---------------------------------------------------------------------------
+// JSON schema — minimal shape the plugin actually forwards to providers
+// ---------------------------------------------------------------------------
+
+export interface JsonSchema {
+  type?: string;
+  properties?: Record<string, JsonSchema>;
+  required?: string[];
+  items?: JsonSchema;
+  enum?: unknown[];
+  additionalProperties?: boolean | JsonSchema;
+  description?: string;
+  [key: string]: unknown;
+}
+
+// ---------------------------------------------------------------------------
+// Content blocks (Anthropic-shaped, unified across providers)
+// ---------------------------------------------------------------------------
+
+export interface TextBlock {
+  type: 'text';
+  text: string;
+}
+
+export interface ImageUrlSource {
+  type: 'url';
+  url: string;
+}
+
+export interface ImageBase64Source {
+  type: 'base64';
+  /** e.g. 'image/png', 'image/jpeg' */
+  media_type: string;
+  data: string;
+}
+
+export interface ImageBlock {
+  type: 'image';
+  source: ImageUrlSource | ImageBase64Source;
+}
+
+export type ContentBlock = TextBlock | ImageBlock;
+
+// ---------------------------------------------------------------------------
+// Tool calls
+// ---------------------------------------------------------------------------
+
+export interface Tool {
+  name: string;
+  description?: string;
+  /** Preferred (Anthropic naming) */
+  input_schema?: JsonSchema;
+  /** Alias accepted for OpenAI-style tool declarations */
+  parameters?: JsonSchema;
+}
+
+export interface ToolCall {
+  id: string;
+  name: string;
+  input: unknown;
+}
+
+// ---------------------------------------------------------------------------
+// Messages
+// ---------------------------------------------------------------------------
+
+export interface UserMessage {
+  role: 'user';
+  content: string | ContentBlock[];
+}
+
+export interface AssistantMessage {
+  role: 'assistant';
+  content?: string | ContentBlock[] | null;
+  /** Set when replaying a prior turn that called tools */
+  toolCalls?: ToolCall[];
+}
+
+export interface ToolResultMessage {
+  role: 'tool' | 'tool_result';
+  /** OpenAI naming */
+  tool_call_id?: string;
+  /** Anthropic naming */
+  tool_use_id?: string;
+  content: string | ContentBlock[];
+}
+
+export type Message = UserMessage | AssistantMessage | ToolResultMessage;
+
+// ---------------------------------------------------------------------------
+// Chat request/response
+// ---------------------------------------------------------------------------
+
+export interface RetryOptions {
+  /** Default 3 */
+  max?: number;
+  /** Default 500 */
+  baseMs?: number;
+  /** Default 20000 */
+  maxMs?: number;
+}
+
+export type ThinkingConfig =
+  | { type: 'adaptive'; [k: string]: unknown }
+  | { type: 'disabled' }
+  | { type: 'enabled'; budget_tokens?: number; [k: string]: unknown }
+  | false;
+
+export interface ChatRequest {
+  messages: Message[];
+  system?: string;
+  /** Overrides the modelId configured on the provider instance */
+  model?: string;
+  /** Default 16000 */
+  maxTokens?: number;
+  /** Enables tool/function calling */
+  tools?: Tool[];
+  /** JSON schema for structured output; plugin parses response.text into response.data */
+  format?: JsonSchema;
+  /** Anthropic-only: pass through to the SDK. Default { type: 'adaptive' } on Anthropic. */
+  thinking?: ThinkingConfig;
+  /** Anthropic-only: sets cache_control on the system prompt */
+  cache?: boolean;
+  /** Per-call retry override */
+  retries?: RetryOptions;
+}
+
+export interface Usage {
+  input_tokens?: number;
+  output_tokens?: number;
+  cache_creation_input_tokens?: number;
+  cache_read_input_tokens?: number;
+}
+
+export interface ChatResponse<D = unknown> {
+  /** Concatenated text from all text content blocks */
+  text: string;
+  /** Populated when `format` was set on the request and the response was valid JSON */
+  data?: D;
+  /** Populated when the model called one or more tools */
+  toolCalls?: ToolCall[];
+  /** Provider-native response object — shape varies by provider */
+  raw: unknown;
+  usage: Usage;
+  /** 'end_turn' | 'tool_use' | 'max_tokens' | 'stop' | 'refusal' | provider-specific */
+  stopReason?: string;
+  model?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Streaming
+// ---------------------------------------------------------------------------
+
+export interface TextDeltaChunk {
+  type: 'text_delta';
+  text: string;
+}
+
+export interface DoneChunk {
+  type: 'done';
+  /** Accumulated text from the whole stream */
+  text: string;
+  usage: Usage;
+  stopReason?: string;
+  model?: string;
+}
+
+export type StreamChunk = TextDeltaChunk | DoneChunk;
+
+// ---------------------------------------------------------------------------
+// Embeddings
+// ---------------------------------------------------------------------------
+
+export interface EmbedRequest {
+  input: string | string[];
+  model?: string;
+}
+
+export interface EmbedResponse {
+  embeddings: number[][];
+  model?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Provider options (values you put under cds.requires.<name>)
+// ---------------------------------------------------------------------------
+
+export interface ProviderOptions {
+  kind?: string;
+  /** Default model to use when a request doesn't specify one */
+  modelId?: string;
+  /** Alias for modelId, kept for older configs */
+  model?: string;
+  maxTokens?: number;
+  retries?: RetryOptions;
+  credentials?: Record<string, unknown>;
+  [key: string]: unknown;
+}
+
+// ---------------------------------------------------------------------------
+// Base + provider classes
+// ---------------------------------------------------------------------------
+
+/**
+ * Abstract LLM service. All providers extend this.
+ * Not intended to be instantiated directly; use one of the provider subclasses,
+ * or connect via `cds.connect.to('llm')` in a CAP app.
+ */
+export class LLMService {
+  constructor(name: string, model: unknown, options?: ProviderOptions);
+  modelId?: string;
+  defaultMaxTokens: number;
+  init(): Promise<void>;
+  chat<D = unknown>(req: ChatRequest): Promise<ChatResponse<D>>;
+  stream(req: ChatRequest): AsyncGenerator<StreamChunk, void, void>;
+  embed(req: EmbedRequest): Promise<EmbedResponse>;
+}
+
+export class AnthropicLLMService extends LLMService {
+  apiKey: string;
+}
+
+export class OllamaLLMService extends LLMService {
+  baseUrl: string;
+}
+
+export class OpenAICompatibleLLMService extends LLMService {
+  baseUrl: string;
+  apiKey: string;
+}
+
+export class GroqLLMService extends OpenAICompatibleLLMService {}
+
+export class GenAIHubLLMService extends OpenAICompatibleLLMService {
+  aiCoreUrl: string;
+  tokenUrl: string;
+  clientId: string;
+  clientSecret: string;
+  deploymentId: string;
+  resourceGroup: string;
+}
+
+// ---------------------------------------------------------------------------
+// Image helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Load an image from disk, base64-encode, auto-detect media type from extension.
+ * Supported: .png, .jpg, .jpeg, .gif, .webp
+ */
+export function imageFromFile(filePath: string): Promise<ImageBlock>;
+
+/**
+ * Wrap a URL as an image block. Works with Anthropic and OpenAI-compat providers.
+ * Ollama does not accept URLs — use `imageFromFile` or `imageFromBase64` instead.
+ */
+export function imageFromUrl(url: string): ImageBlock;
+
+/**
+ * Wrap raw base64 image data as an image block.
+ * @param base64Data - Base64-encoded image bytes (no data-URL prefix)
+ * @param mediaType - e.g. 'image/png' (default), 'image/jpeg', 'image/gif', 'image/webp'
+ */
+export function imageFromBase64(base64Data: string, mediaType?: string): ImageBlock;

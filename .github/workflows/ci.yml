@@ -42,5 +42,11 @@ jobs:
         # resolution and treats a bare directory name as a require() target
         run: node --test test/*.js
 
+      - name: TypeScript type-check (lib/index.d.ts + test/types.test-d.ts)
+        working-directory: cds-plugin-llm
+        run: |
+          npm install --no-save --no-audit --no-fund --loglevel=error typescript @types/node
+          npx tsc --noEmit
+
       - name: End-to-end verification against mock AI Core
         run: node scripts/verify-genai-hub.js
