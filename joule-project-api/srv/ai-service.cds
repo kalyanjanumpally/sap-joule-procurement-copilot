@@ -47,15 +47,23 @@ service AIService @(path: '/ai') {
   ) returns InvoiceRisk;
 
   /**
-   * Vision-powered structured extraction. Provide either a base64-encoded
-   * image OR a public image URL. Returns structured line items + totals.
+   * Structured extraction from an invoice — supports images (all providers
+   * with a vision model) or PDFs (Anthropic-only; Claude 3.5+ has native
+   * PDF understanding).
    *
-   * Uses a vision model (default: llama-3.2-11b-vision-preview on Groq);
-   * override via the `model` parameter to use gpt-4o, claude-opus-4-7, etc.
+   *   - Image: pass imageBase64 or imageUrl (+ optional mediaType).
+   *   - PDF:   pass pdfBase64 or pdfUrl. Requires the LLM provider config to
+   *            point at Anthropic; other providers will reject document blocks.
+   *
+   * `model` overrides the configured default. For PDFs, use e.g.
+   * 'claude-opus-4-7'. For images, 'meta-llama/llama-4-scout-17b-16e-instruct'
+   * (Groq) or 'gpt-4o' (OpenAI-compat).
    */
   action extractInvoiceLineItems(
     imageBase64 : LargeString,
     imageUrl    : String,
+    pdfBase64   : LargeString,
+    pdfUrl      : String,
     mediaType   : String,
     model       : String
   ) returns InvoiceExtract;

@@ -1,5 +1,8 @@
 const cds = require('@sap/cds');
-const { imageFromBase64, imageFromUrl } = require('@saptarishi/cds-plugin-llm');
+const {
+  imageFromBase64, imageFromUrl,
+  pdfFromBase64, pdfFromUrl,
+} = require('@saptarishi/cds-plugin-llm');
 
 const PO_SYSTEM = `You summarize S/4HANA purchase orders for procurement approvers.
 Rules:
@@ -141,27 +144,42 @@ module.exports = class AIService extends cds.ApplicationService {
     });
 
     this.on('extractInvoiceLineItems', async (req) => {
-      const { imageBase64, imageUrl, mediaType, model } = req.data;
+      const { imageBase64, imageUrl, pdfBase64, pdfUrl, mediaType, model } = req.data;
 
-      if (!imageBase64 && !imageUrl) {
-        req.error(400, 'Provide either imageBase64 or imageUrl');
+      const isPdf = !!(pdfBase64 || pdfUrl);
+      const isImage = !!(imageBase64 || imageUrl);
+
+      if (!isPdf && !isImage) {
+        req.error(400, 'Provide one of: imageBase64, imageUrl, pdfBase64, pdfUrl');
+        return;
+      }
+      if (isPdf && isImage) {
+        req.error(400, 'Provide either an image OR a PDF, not both');
         return;
       }
 
-      const imageBlock = imageBase64
-        ? imageFromBase64(imageBase64, mediaType || 'image/png')
-        : imageFromUrl(imageUrl);
+      let contentBlock;
+      let defaultModel;
+      if (isPdf) {
+        // PDF path: Anthropic-only. Caller's LLM config must be llm-anthropic
+        // OR they pass model: 'claude-...' AND the configured provider is Anthropic.
+        contentBlock = pdfBase64 ? pdfFromBase64(pdfBase64) : pdfFromUrl(pdfUrl);
+        defaultModel = 'claude-opus-4-7';
+      } else {
+        contentBlock = imageBase64
+          ? imageFromBase64(imageBase64, mediaType || 'image/png')
+          : imageFromUrl(imageUrl);
+        // Groq's current vision model; overridable
+        defaultModel = 'meta-llama/llama-4-scout-17b-16e-instruct';
+      }
 
       const { data, usage, model: usedModel, text } = await llm.chat({
-        // Default to Groq's current vision model. GPT-4o or Claude 3.5+ also
-        // work if the underlying LLM provider supports them.
-        // Groq vision models change frequently — check console.groq.com/docs/models.
-        model: model || 'meta-llama/llama-4-scout-17b-16e-instruct',
+        model: model || defaultModel,
         system: INVOICE_EXTRACT_SYSTEM,
         messages: [{
           role: 'user',
           content: [
-            imageBlock,
+            contentBlock,
             { type: 'text', text: 'Extract the invoice into the requested JSON shape.' },
           ],
         }],

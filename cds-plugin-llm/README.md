@@ -291,6 +291,35 @@ Wire-shape translation is provider-aware:
 - **OpenAI-compatible / Groq**: `image_url` blocks with data URLs for base64
 - **Ollama**: text goes in `content`, images extracted to `images: [base64, ...]` (Ollama does not accept URLs — use `imageFromFile()` or `imageFromBase64()`)
 
+## PDF documents (new in v0.8.0)
+
+Pass PDF documents inline. **Anthropic-only today** — Claude 3.5+ has native PDF understanding (parses text + visuals in one pass). Other providers throw a clear error rather than silently degrading.
+
+```js
+const { pdfFromFile, pdfFromUrl, pdfFromBase64 } = require('@saptarishi/cds-plugin-llm');
+
+const pdf = await pdfFromFile('/tmp/scanned-invoice.pdf');
+// or: const pdf = pdfFromUrl('https://example.com/invoice.pdf');
+// or: const pdf = pdfFromBase64(base64Data);
+
+const { data } = await llm.chat({
+  model: 'claude-opus-4-7',
+  system: 'Extract structured data from scanned invoices.',
+  messages: [{
+    role: 'user',
+    content: [
+      pdf,
+      { type: 'text', text: 'Return vendor, invoice number, line items.' },
+    ],
+  }],
+  format: { /* JSON schema */ },
+});
+```
+
+For non-Anthropic providers, extract text/render pages client-side first:
+- **OpenAI-compat**: use their Files API (requires additional integration; on the 0.9 roadmap)
+- **Ollama**: render PDF pages to images via `pdftoppm` (poppler), pass to a vision model like `llava` or `llama3.2-vision`
+
 ## SAP Generative AI Hub setup
 
 The `llm-genai-hub` kind targets a **deployment** in your BTP AI Core instance. Prerequisites:
@@ -428,6 +457,7 @@ llm.embed({ input: string | string[], model? })
 | structured output (`format`) | ✓ (`output_config`) | ✓ (native `format`) | ✓ (json_object mode) | ✓ (json_object) | ✓ (json_object) |
 | tool use (`tools`)    | ✓ (native)     | ✓ (qwen2.5, llama3.1+) | ✓ (function-calling models) | ✓ | ✓ |
 | vision (images)       | ✓ (Claude 3.5+) | ✓ (llava, moondream, llama3.2-vision) | ✓ (llama-4-scout, etc.) | ✓ (gpt-4o, etc.) | ✓ (deployment-dependent) |
+| PDF (documents)       | ✓ (Claude 3.5+ native)  | — (render pages to images first) | — | — (requires Files API integration) | — |
 | embeddings            | — (no first-party embeddings) | ✓ (`mxbai-embed-large`, etc.) | ✓ (when model available) | ✓ (`text-embedding-3-*`, `ada-002`, etc.) | — (needs separate deployment; planned) |
 | prompt caching (`cache`) | ✓ (system prompt ephemeral) | — | — | — | — |
 | adaptive thinking (`thinking`) | ✓ (Opus 4.7 native) | — | — | — | — |
@@ -482,8 +512,8 @@ CI runs the same checks on every push (Node 20 + 22 matrix).
 ## Roadmap
 
 - ~~**0.7**: embeddings on OpenAI-compat / Groq~~ ✓ shipped in v0.7.0
-- **0.8**: PDF content blocks (Anthropic + OpenAI-compat native support)
-- **0.9**: GenAI Hub embeddings (separate deployment ID support) + response caching layer
+- ~~**0.8**: PDF content blocks (Anthropic native; other providers explicit-reject)~~ ✓ shipped in v0.8.0
+- **0.9**: OpenAI Files API integration for PDF (via GPT-4o) + GenAI Hub embeddings + response caching layer
 - **1.0**: live-verified GenAI Hub provider + API stability commitment
 - **Beyond**: per-user rate limiting hooks, custom middleware/interceptor pattern
 

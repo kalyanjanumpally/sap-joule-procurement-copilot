@@ -1,4 +1,7 @@
-const { imageFromFile, imageFromUrl, imageFromBase64 } = require('./util');
+const {
+  imageFromFile, imageFromUrl, imageFromBase64,
+  pdfFromFile, pdfFromUrl, pdfFromBase64,
+} = require('./util');
 
 module.exports = {
   LLMService: require('./LLMService'),
@@ -11,4 +14,8 @@ module.exports = {
   imageFromFile,
   imageFromUrl,
   imageFromBase64,
+  // PDF helpers (Anthropic-only today)
+  pdfFromFile,
+  pdfFromUrl,
+  pdfFromBase64,
 };

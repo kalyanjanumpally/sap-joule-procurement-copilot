@@ -43,7 +43,24 @@ export interface ImageBlock {
   source: ImageUrlSource | ImageBase64Source;
 }
 
-export type ContentBlock = TextBlock | ImageBlock;
+export interface DocumentUrlSource {
+  type: 'url';
+  url: string;
+}
+
+export interface DocumentBase64Source {
+  type: 'base64';
+  /** 'application/pdf' */
+  media_type: string;
+  data: string;
+}
+
+export interface DocumentBlock {
+  type: 'document';
+  source: DocumentUrlSource | DocumentBase64Source;
+}
+
+export type ContentBlock = TextBlock | ImageBlock | DocumentBlock;
 
 // ---------------------------------------------------------------------------
 // Tool calls
@@ -266,3 +283,20 @@ export function imageFromUrl(url: string): ImageBlock;
  * @param mediaType - e.g. 'image/png' (default), 'image/jpeg', 'image/gif', 'image/webp'
  */
 export function imageFromBase64(base64Data: string, mediaType?: string): ImageBlock;
+
+/**
+ * Load a PDF from disk and return a plugin-shape document block.
+ * PDF support requires an Anthropic provider (Claude 3.5+); other providers
+ * will throw when they see a document block.
+ */
+export function pdfFromFile(filePath: string): Promise<DocumentBlock>;
+
+/**
+ * Reference a remote PDF by URL. Anthropic-only.
+ */
+export function pdfFromUrl(url: string): DocumentBlock;
+
+/**
+ * Wrap raw base64 PDF bytes into a plugin-shape document block. Anthropic-only.
+ */
+export function pdfFromBase64(base64Data: string): DocumentBlock;

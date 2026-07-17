@@ -119,6 +119,50 @@ function imageFromBase64(base64Data, mediaType = 'image/png') {
   };
 }
 
+// ---------------------------------------------------------------------------
+// PDF document-block helpers (new in v0.8.0)
+// ---------------------------------------------------------------------------
+
+/**
+ * Load a PDF from disk and return a plugin-shape document block.
+ *
+ *   const pdf = await pdfFromFile('/tmp/invoice.pdf');
+ *   await llm.chat({
+ *     model: 'claude-opus-4-7',
+ *     messages: [{ role: 'user', content: [pdf, { type: 'text', text: 'Extract line items' }] }],
+ *   });
+ *
+ * PDFs are only usable with Anthropic providers today — Claude 3.5+ has
+ * native PDF understanding. OpenAI-compat + Ollama providers will throw
+ * a clear error if a document block is passed.
+ */
+async function pdfFromFile(filePath) {
+  const path = require('node:path');
+  const fs = require('node:fs/promises');
+  const ext = path.extname(filePath).toLowerCase();
+  if (ext !== '.pdf') {
+    throw new Error(`pdfFromFile: expected .pdf extension, got '${ext}'`);
+  }
+  const buf = await fs.readFile(filePath);
+  return {
+    type: 'document',
+    source: { type: 'base64', media_type: 'application/pdf', data: buf.toString('base64') },
+  };
+}
+
+/** Reference a remote PDF by URL. Works with Anthropic providers. */
+function pdfFromUrl(url) {
+  return { type: 'document', source: { type: 'url', url } };
+}
+
+/** Wrap raw base64 PDF bytes into a plugin-shape document block. */
+function pdfFromBase64(base64Data) {
+  return {
+    type: 'document',
+    source: { type: 'base64', media_type: 'application/pdf', data: base64Data },
+  };
+}
+
 module.exports = {
   withRetry,
   RetryableError,
@@ -127,4 +171,7 @@ module.exports = {
   imageFromFile,
   imageFromUrl,
   imageFromBase64,
+  pdfFromFile,
+  pdfFromUrl,
+  pdfFromBase64,
 };

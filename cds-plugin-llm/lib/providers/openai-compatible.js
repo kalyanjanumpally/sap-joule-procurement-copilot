@@ -162,16 +162,18 @@ function translateMessage(m) {
       })),
     };
   }
-  // Multi-block content (vision: mix of text + image blocks)
+  // Multi-block content (mix of text + image + document blocks)
   if (Array.isArray(m.content)) {
-    const hasImage = m.content.some(b => b?.type === 'image');
-    if (hasImage) {
+    const hasNonText = m.content.some(b => b?.type && b.type !== 'text');
+    if (hasNonText) {
+      // Any non-text block triggers the multi-part path. translateBlock rejects
+      // document blocks with a clear error (Anthropic-only feature).
       return {
         role: m.role,
         content: m.content.map(translateBlock).filter(Boolean),
       };
     }
-    // No images: flatten to text (matches prior behavior)
+    // Text-only array: flatten to string (matches prior behavior)
     return { role: m.role, content: m.content.map(b => b.text ?? '').join('') };
   }
   // Plain string content
@@ -187,6 +189,13 @@ function translateBlock(block) {
       return { type: 'image_url', image_url: { url: `data:${src.media_type};base64,${src.data}` } };
     }
     throw new Error(`Unsupported image source type: ${src.type}`);
+  }
+  if (block.type === 'document') {
+    throw new Error(
+      'PDF/document blocks are only supported on the Anthropic provider today. ' +
+      'For OpenAI-compatible providers, extract text from the PDF client-side ' +
+      '(e.g. via pdf-parse or a vision model on rendered pages).'
+    );
   }
   return null;
 }

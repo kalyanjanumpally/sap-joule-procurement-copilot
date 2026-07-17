@@ -111,6 +111,13 @@ function translateMessage(m) {
         );
       }
     }
+    else if (block?.type === 'document') {
+      throw new Error(
+        'PDF/document blocks are not supported on Ollama. Only Anthropic has native PDF ' +
+        'understanding. For Ollama, render PDF pages to images (e.g. via poppler / pdftoppm) ' +
+        'and pass them as image blocks to a vision model like llava or llama3.2-vision.'
+      );
+    }
   }
   const out = { role: m.role, content: textParts.join('\n') };
   if (images.length) out.images = images;

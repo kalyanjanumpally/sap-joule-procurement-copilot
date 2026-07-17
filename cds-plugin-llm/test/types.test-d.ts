@@ -11,6 +11,9 @@ import {
   imageFromFile,
   imageFromUrl,
   imageFromBase64,
+  pdfFromFile,
+  pdfFromUrl,
+  pdfFromBase64,
   // Types
   ChatRequest,
   ChatResponse,
@@ -24,6 +27,7 @@ import {
   ContentBlock,
   TextBlock,
   ImageBlock,
+  DocumentBlock,
   Tool,
   ToolCall,
   Usage,
@@ -135,6 +139,15 @@ async function example() {
   await groq.chat({
     model: 'llama-vision',
     messages: [{ role: 'user', content: blocks }],
+  });
+
+  // ---- chat() — PDF (Anthropic-only) --------------------------------------
+  const pdf1: DocumentBlock = pdfFromUrl('https://x/y.pdf');
+  const pdf2: DocumentBlock = pdfFromBase64('JVBERi0xLjQ=');
+  const pdf3: DocumentBlock = await pdfFromFile('/tmp/x.pdf');
+  const pdfContent: ContentBlock[] = [pdf1, pdf2, pdf3, { type: 'text', text: 'summarize' }];
+  await anthropic.chat({
+    messages: [{ role: 'user', content: pdfContent }],
   });
 
   // ---- stream() ------------------------------------------------------------
