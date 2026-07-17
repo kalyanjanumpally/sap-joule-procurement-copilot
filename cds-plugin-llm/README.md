@@ -6,15 +6,41 @@
 
 LLM-agnostic AI service for SAP CAP. One unified interface — swap between Anthropic (Claude), Ollama (local), Groq, any OpenAI-compatible endpoint, or SAP Generative AI Hub without changing your handler code.
 
-**Status:** alpha (v0.4.0). All five providers implemented. GenAI Hub is built to SAP's documented API contract and unit-tested against mocks; needs an AI Core extended plan to live-verify (feedback from anyone with access very welcome).
+**Status:** alpha (v0.6.2). All five providers implemented, 39 unit tests + wire-protocol E2E verification against a mock AI Core, CI on Node 20 + 22. GenAI Hub built to SAP's documented API contract and unit-tested against mocks; live-verification against a real AI Core `extended` deployment is the next open item.
 
-## Why
+## What it is
 
-`@cap-js/ai` only speaks SAP Generative AI Hub, which requires the paid `extended` plan of SAP AI Core. This plugin lets you:
+A CAP service kind that turns `cds.connect.to('llm')` into a working LLM client — with one unified interface (`chat`, `stream`, `embed`) that speaks to any of five backends. Swapping backends is a config change, not a code change.
 
-- **Develop locally** against Ollama (free), free Groq inference, or your own Anthropic key
-- **Deploy to BTP** against GenAI Hub via the same handler code
-- Keep your CAP service definitions untouched when swapping backends
+Complementary to [`@cap-js/ai`](https://github.com/cap-js/ai), which focuses on value-help recommendations and SAP AI Core integration. This plugin fills the more general "I need a CAP-idiomatic way to call LLMs, with a local development story and multiple provider options" gap.
+
+## Architecture
+
+```
+    Your CAP handler
+          │
+          │  cds.connect.to('llm')  →  { chat, stream, embed }
+          ↓
+    ┌─────────────────────────────────────────────┐
+    │  LLMService  (base class)                   │
+    │  - retries, structured-output parsing       │
+    │  - unified chunk shape for streaming        │
+    └────────────┬────────────────────────────────┘
+                 │
+                 ▼
+    ┌────────────────────┬──────────────┬──────────────┐
+    │ AnthropicLLM       │ OllamaLLM    │ GroqLLM      │
+    │ OpenAICompatible   │ GenAIHubLLM  │              │
+    └────────────────────┴──────────────┴──────────────┘
+      ↓                    ↓              ↓
+    Anthropic         Local Ollama    Groq / OpenAI /
+    Messages API      HTTP            AI Core / any
+                                      OpenAI-compat
+```
+
+- **No CDS entities or served OData surface** — this is a client library, not an OData service. `cds.connect.to('llm')` returns the provider instance directly.
+- **Provider selection at connect time** via `cds.requires.llm.kind` — profile-aware, so `[development]`, `[production]`, `[genai-hub]`, etc. can each point at a different backend.
+- **Provider inheritance:** `GroqLLMService` and `GenAIHubLLMService` both extend `OpenAICompatibleLLMService` (they speak the OpenAI `/chat/completions` shape); the latter adds OAuth + resource-group headers on top.
 
 ## Install
 
@@ -374,6 +400,73 @@ llm.chat({
 llm.embed({ input: string | string[], model? })
   => Promise<{ embeddings: number[][], model: string }>
 ```
+
+## Provider capability matrix
+
+|                       | `llm-anthropic` | `llm-ollama` | `llm-groq` | `llm-openai-compatible` | `llm-genai-hub` |
+|---|---|---|---|---|---|
+| chat                  | ✓ | ✓ | ✓ | ✓ | ✓ |
+| stream                | ✓ (SDK)        | ✓ (NDJSON)   | ✓ (SSE)   | ✓ (SSE)                 | ✓ (SSE) |
+| structured output (`format`) | ✓ (`output_config`) | ✓ (native `format`) | ✓ (json_object mode) | ✓ (json_object) | ✓ (json_object) |
+| tool use (`tools`)    | ✓ (native)     | ✓ (qwen2.5, llama3.1+) | ✓ (function-calling models) | ✓ | ✓ |
+| vision (images)       | ✓ (Claude 3.5+) | ✓ (llava, moondream, llama3.2-vision) | ✓ (llama-4-scout, etc.) | ✓ (gpt-4o, etc.) | ✓ (deployment-dependent) |
+| embeddings            | — (no first-party embeddings) | ✓ (`mxbai-embed-large`, etc.) | — (planned) | — (planned) | — (planned) |
+| prompt caching (`cache`) | ✓ (system prompt ephemeral) | — | — | — | — |
+| adaptive thinking (`thinking`) | ✓ (Opus 4.7 native) | — | — | — | — |
+
+## FAQ
+
+**How does this relate to `@cap-js/ai`?**
+`@cap-js/ai` is scoped to value-help recommendations and SAP-RPT-1 with SAP AI Core integration. This plugin is a general-purpose LLM client with multi-provider support and a broader feature surface (streaming, tool use, vision, structured output). The two can coexist: one CAP app can `cds.connect.to('ai')` for value-help features and `cds.connect.to('llm')` for direct LLM calls.
+
+**Can I use this without SAP BTP?**
+Yes. Only the `llm-genai-hub` kind requires BTP (specifically AI Core). The other four kinds (Anthropic, Ollama, Groq, OpenAI-compatible) work in any Node.js environment. This is deliberate — the plugin is useful for CAP apps that don't run on BTP, and useful for prototyping before a BTP deployment.
+
+**Is this production-ready?**
+It's `0.x`. The core surface (`chat`, `stream`, `embed`, five providers, retries, structured output, tool use, vision) is functional and unit-tested. Pin an exact version (`"@saptarishi/cds-plugin-llm": "0.6.2"`) if you deploy — the `0.x` range doesn't promise API stability across minor bumps. Live-verification against a real SAP AI Core `extended` deployment is the biggest open item.
+
+**How do I add a new provider?**
+Extend `LLMService` (or `OpenAICompatibleLLMService` if the target speaks the OpenAI shape), implement `_chat` (required), plus `_stream` and `_embed` if applicable. Register a kind in your `package.json` under `cds.requires.kinds.<my-provider>` with `impl` pointing at the new class file and `external: true`.
+
+**Which model do you recommend for common tasks?**
+- Structured extraction / classification: any 7B+ instruction-tuned model. Groq's `llama-3.3-70b-versatile` is a good default (fast + free tier).
+- Vision (invoice OCR, chart reading): Claude Opus 4.7 or GPT-4o for accuracy; Groq's `meta-llama/llama-4-scout-17b-16e-instruct` or Ollama's `llava` for local/cheap.
+- Long-context summarization: Claude Opus 4.7 (1M context) or a GenAI Hub deployment of the same.
+- Tool use / agentic loops: Claude 3.5+ or qwen2.5 on Ollama for multi-step reliability. Groq's llama models work for single-tool cases.
+- Embeddings: Ollama with `mxbai-embed-large` or `nomic-embed-text`.
+
+**Why not just use `@anthropic-ai/sdk` or `openai` directly?**
+Three reasons: (1) CAP idiom — `cds.connect.to('llm')` is more natural in a CAP handler than importing an SDK class. (2) Provider swap without code change — flip a config value from `llm-groq` to `llm-anthropic` and the same handler works. (3) Unified interface for tools + structured output + streaming across all providers, so you don't rewrite the message-translation code five times.
+
+**What happens if the underlying provider's API changes?**
+Each provider adapter is a thin file (~150 lines). Provider API changes are localized to one file. The plugin's public surface (`chat`, `stream`, `embed`) is stable across provider changes.
+
+## Contributing
+
+PRs and issues welcome. The [repo](https://github.com/kalyanjanumpally/sap-joule-procurement-copilot) has the plugin as `cds-plugin-llm/`. Standard workflow:
+
+```sh
+git clone https://github.com/kalyanjanumpally/sap-joule-procurement-copilot
+cd sap-joule-procurement-copilot/cds-plugin-llm
+npm install
+npm test              # 39 unit tests, no external deps
+npm run typecheck     # TypeScript definition check
+node ../scripts/verify-genai-hub.js   # E2E mock verification
+```
+
+CI runs the same checks on every push (Node 20 + 22 matrix).
+
+**Highest-value contributions right now:**
+- Live-verification of the GenAI Hub provider against a real AI Core `extended` deployment
+- Embeddings support for OpenAI-compatible providers
+- Additional structured-output modes (JSON schema strict on models that support it)
+
+## Roadmap
+
+- **0.7**: embeddings on OpenAI-compat / Groq (feature parity with Ollama's `embed()`)
+- **0.8**: PDF content blocks (Anthropic + OpenAI-compat native support)
+- **1.0**: live-verified GenAI Hub provider + API stability commitment
+- **Beyond**: response caching, per-user rate limiting hooks, custom middleware/interceptor pattern
 
 ## License
 
