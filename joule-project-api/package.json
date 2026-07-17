@@ -10,7 +10,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.111.0",
     "@sap/cds": "^9",
-    "@saptarishi/cds-plugin-llm": "^0.6.0",
+    "@saptarishi/cds-plugin-llm": "^0.6.1",
     "express": "^4"
   },
   "engines": {
@@ -21,27 +21,22 @@
       "llm": {
         "[development]": {
           "kind": "llm-groq",
-          "service": "LLM",
           "modelId": "llama-3.3-70b-versatile"
         },
         "[ollama]": {
           "kind": "llm-ollama",
-          "service": "LLM",
           "modelId": "qwen2.5:14b"
         },
         "[hybrid]": {
           "kind": "llm-anthropic",
-          "service": "LLM",
           "modelId": "claude-opus-4-7"
         },
         "[production]": {
           "kind": "llm-groq",
-          "service": "LLM",
           "modelId": "llama-3.3-70b-versatile"
         },
         "[genai-hub]": {
           "kind": "llm-genai-hub",
-          "service": "LLM",
           "credentials": {
             "deploymentId": "<AICORE_DEPLOYMENT_ID>",
             "resourceGroup": "default"

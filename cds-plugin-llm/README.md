@@ -60,33 +60,14 @@ Set the appropriate env var (see `.env.example`):
 
 ## Use
 
-Because of a CAP v9 quirk with `cds.connect.to()` and this plugin's kind registration, current usage instantiates the provider directly. This is documented as an open issue; will move to `cds.connect.to('llm')` in a future release.
+Standard CAP idiom — `cds.connect.to()`:
 
 ```js
 const cds = require('@sap/cds');
-const {
-  AnthropicLLMService, OllamaLLMService, GroqLLMService,
-  OpenAICompatibleLLMService, GenAIHubLLMService,
-} = require('@saptarishi/cds-plugin-llm');
-
-const PROVIDERS = {
-  'llm-anthropic': AnthropicLLMService,
-  'llm-ollama': OllamaLLMService,
-  'llm-groq': GroqLLMService,
-  'llm-openai-compatible': OpenAICompatibleLLMService,
-  'llm-genai-hub': GenAIHubLLMService,
-};
-
-async function connectLLM() {
-  const cfg = cds.env.requires.llm;
-  const svc = new PROVIDERS[cfg.kind]('llm', null, cfg);
-  await svc.init();
-  return svc;
-}
 
 module.exports = class ProcurementService extends cds.ApplicationService {
   async init() {
-    const llm = await connectLLM();
+    const llm = await cds.connect.to('llm');
 
     this.on('summarizePO', async (req) => {
       const { poId } = req.data;

@@ -1,6 +1,6 @@
 {
   "name": "@saptarishi/cds-plugin-llm",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "LLM-agnostic AI service for SAP CAP. Speaks Anthropic, Ollama, Groq, any OpenAI-compatible endpoint, and SAP Generative AI Hub behind one API. Supports vision / multimodal input, streaming responses, structured outputs, tool use / function calling, and automatic retries with exponential backoff.",
   "main": "lib/index.js",
   "files": [
@@ -37,23 +37,23 @@
       "kinds": {
         "llm-anthropic": {
           "impl": "@saptarishi/cds-plugin-llm/lib/providers/anthropic.js",
-          "model": "@saptarishi/cds-plugin-llm/lib/llm.cds"
+          "external": true
         },
         "llm-ollama": {
           "impl": "@saptarishi/cds-plugin-llm/lib/providers/ollama.js",
-          "model": "@saptarishi/cds-plugin-llm/lib/llm.cds"
+          "external": true
         },
         "llm-genai-hub": {
           "impl": "@saptarishi/cds-plugin-llm/lib/providers/genai-hub.js",
-          "model": "@saptarishi/cds-plugin-llm/lib/llm.cds"
+          "external": true
         },
         "llm-groq": {
           "impl": "@saptarishi/cds-plugin-llm/lib/providers/groq.js",
-          "model": "@saptarishi/cds-plugin-llm/lib/llm.cds"
+          "external": true
         },
         "llm-openai-compatible": {
           "impl": "@saptarishi/cds-plugin-llm/lib/providers/openai-compatible.js",
-          "model": "@saptarishi/cds-plugin-llm/lib/llm.cds"
+          "external": true
         }
       }
     }

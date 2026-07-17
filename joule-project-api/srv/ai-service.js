@@ -1,31 +1,5 @@
 const cds = require('@sap/cds');
-const {
-  AnthropicLLMService,
-  OllamaLLMService,
-  GenAIHubLLMService,
-  GroqLLMService,
-  OpenAICompatibleLLMService,
-  imageFromBase64,
-  imageFromUrl,
-} = require('@saptarishi/cds-plugin-llm');
-
-const PROVIDERS = {
-  'llm-anthropic': AnthropicLLMService,
-  'llm-ollama': OllamaLLMService,
-  'llm-genai-hub': GenAIHubLLMService,
-  'llm-groq': GroqLLMService,
-  'llm-openai-compatible': OpenAICompatibleLLMService,
-};
-
-async function connectLLM() {
-  const cfg = cds.env.requires?.llm;
-  if (!cfg) throw new Error('cds.requires.llm not configured');
-  const ProviderClass = PROVIDERS[cfg.kind];
-  if (!ProviderClass) throw new Error(`Unknown LLM kind: ${cfg.kind}`);
-  const svc = new ProviderClass('llm', null, cfg);
-  await svc.init();
-  return svc;
-}
+const { imageFromBase64, imageFromUrl } = require('@saptarishi/cds-plugin-llm');
 
 const PO_SYSTEM = `You summarize S/4HANA purchase orders for procurement approvers.
 Rules:
@@ -50,10 +24,10 @@ Low = current, matched to PO, within tolerance.
 Rationale must cite the specific field(s) driving the rating.`;
 
 // Module-scoped lazy singleton so the streaming Express route (registered in
-// cds.on('bootstrap') below) and the OData handlers below share one LLM instance.
+// AIService.init below) and the OData handlers share one LLM instance.
 let _llmPromise;
 function getLLM() {
-  if (!_llmPromise) _llmPromise = connectLLM();
+  if (!_llmPromise) _llmPromise = cds.connect.to('llm');
   return _llmPromise;
 }
 
